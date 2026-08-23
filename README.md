@@ -43,33 +43,32 @@ Lo que disparas queda anotado tres dias en la pestana **Recientes**, con su
 miniatura y su hora. Es para volver a algo que pusiste ayer y no llegaste a
 guardar, sin gastar otra busqueda. De un vivo se anota el canal, no el video.
 
+## Solapas, carpetas y subcarpetas
+
+Tres niveles con tres nombres, y el mismo nombre en toda la app:
+
+- **Solapa**: las de arriba (Radios, Documentales, Musica). Se crean con el
+  **+** de la fila de solapas.
+- **Carpeta**: adentro de una solapa. Se crea desde el pie del panel, o con el
+  **+** de la solapa en el cuadro de guardar.
+- **Subcarpeta**: adentro de una carpeta, a cualquier profundidad. Se crea con
+  el **+** del encabezado de ese grupo, o con el **+** de esa fila en el
+  cuadro de guardar.
+
+Por dentro son todas lo mismo: una lista plana donde cada una recuerda a su
+madre. El nombre sale de que tan adentro esta, no de un campo aparte.
+
 ## Guardar
 
-El cuadro de guardar muestra el **arbol** de carpetas. Cada fila tiene tres
+El cuadro de guardar muestra el **arbol** completo. Cada fila tiene tres
 blancos distintos, de 34 de alto para no pisarse con el pulgar:
 
 - el **triangulo** abre y cierra esa rama, y queda como la dejaste;
 - el **nombre** guarda ahi;
-- el **+** crea una subcarpeta adentro de esa carpeta, a cualquier
-  profundidad, y guarda ahi mismo: si la estas creando en ese momento es
-  porque lo que tenes en la mano va adentro.
+- el **+** crea un nivel mas adentro y guarda ahi mismo: si la estas creando
+  en ese momento es porque lo que tenes en la mano va adentro.
 
-Abajo de todo, *+ carpeta nueva* crea una de primer nivel.
-
-## Carpetas y subcarpetas
-
-Las pestanas de arriba son las carpetas de primer nivel. Adentro de cualquiera
-se pueden crear subcarpetas —*subcarpeta nueva*, en el pie del panel— y
-anidarlas cuanto haga falta. Las subcarpetas aparecen como filas con carpetita
-al principio de la lista, con la cuenta de todo lo que llevan adentro, y un
-rastro de migas arriba para volver.
-
-Las de adentro no se suman a las pestanas: es lo que evita que la fila de
-arriba crezca hasta que no se pueda leer. Con doce carpetas en una tablet solo
-se veian tres y media.
-
-Las carpetas siguen siendo una lista plana y cada una recuerda a su madre. Eso
-mantiene simple la fusion entre dispositivos, que empareja por id.
+Abajo de todo, *+ solapa nueva*.
 
 ### Como se ve una carpeta
 

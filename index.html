@@ -246,6 +246,8 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .grupo .flecha{font-size:9px;color:var(--ink-3);flex:none}
 .grupo .ruta{color:var(--ink-3);font-weight:normal}
 .grupo .n{margin-left:auto;font-weight:normal;letter-spacing:0;color:var(--ink-3);flex:none}
+.grupo .masg{margin-left:9px;flex:none;width:26px;height:24px;padding:0;border-radius:3px;
+  font:bold 14px Arial,Helvetica,sans-serif;color:var(--btn-ink)}
 .grupo.plegado{color:var(--ink-3)}
 
 /* Mas densa que la vista de carpetas: en una lista larga, la densidad es lo
@@ -731,6 +733,20 @@ function pelar(t){
   return String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+/* Arriba son SOLAPAS; adentro de una solapa, CARPETAS; adentro de una
+   carpeta, SUBCARPETAS. Es el mismo dato con tres nombres segun donde este,
+   y tenerlo en una funcion evita que la app lo llame distinto en cada lado. */
+function tipoDe(f){
+  var n = rutaDe(f.id).length;
+  return n === 1 ? 'solapa' : (n === 2 ? 'carpeta' : 'subcarpeta');
+}
+function mayus(t){ return t.charAt(0).toUpperCase() + t.slice(1); }
+/* Como se va a llamar lo que se cree adentro de esa. */
+function tipoHijaDe(padreId){
+  if(!padreId) return 'solapa';
+  return rutaDe(padreId).length === 1 ? 'carpeta' : 'subcarpeta';
+}
+
 function cuentaDe(f){
   var n = f.items.length;
   descendientes(f.id).forEach(function(h){ n += h.items.length; });
@@ -762,7 +778,7 @@ function renderTabs(){
   }).join('') +
     '<button class="tab' + (!results && current === RECIENTES ? ' on' : '') +
       '" data-tab="' + RECIENTES + '">Recientes</button>' +
-    '<button class="tab nueva" data-newfolder title="Nueva carpeta">+</button>';
+    '<button class="tab nueva" data-newfolder title="Solapa nueva">+</button>';
 
   var activa = $('#tabs').querySelector('.tab.on');
   if(activa && activa.scrollIntoView) activa.scrollIntoView({block:'nearest', inline:'nearest'});
@@ -912,7 +928,7 @@ function renderFolder(){
 
   var grupos = 0, mostrados = 0;
 
-  function grupo(nombres, carpeta){
+  function grupo(nombres, carpeta, propio){
     /* Ordenando trabajamos sobre la lista entera, sin filtrar: si no, las
        flechas moverian el vecino equivocado. */
     var items = modoOrden ? carpeta.items : carpeta.items.filter(coincide);
@@ -925,7 +941,12 @@ function renderFolder(){
       '<span class="flecha">' + (plegado ? '&#9654;' : '&#9660;') + '</span>' +
       esc(nombres[0]) +
       (nombres.length > 1 ? ' <span class="ruta">&rsaquo; ' + esc(nombres.slice(1).join(' > ')) + '</span>' : '') +
-      '<span class="n">' + items.length + '</span></div>';
+      '<span class="n">' + items.length + '</span>' +
+      /* Crear un nivel mas abajo sin salir de aca. En el grupo de los sueltos
+         no va: ese no es una carpeta, es el resto. */
+      (propio ? '' : '<button class="masg" data-dentro2="' + esc(carpeta.id) + '" title="' +
+        esc(tipoHijaDe(carpeta.id)) + ' nueva adentro de ' + esc(carpeta.name) + '">+</button>') +
+    '</div>';
 
     if(!plegado) html += filas(carpeta, items);
   }
@@ -944,12 +965,12 @@ function renderFolder(){
       });
     })(f.id);
     /* Lo suelto de la propia carpeta, al final, para que no quede sepultado. */
-    if(f.items.length) grupo(['Sueltas en ' + f.name], f);
+    if(f.items.length) grupo(['Sueltas en ' + f.name], f, true);
   }
 
   if(!total){
     modoOrden = false;
-    html += '<div class="empty">Esta carpeta esta vacia.<br>' +
+    html += '<div class="empty">Esta ' + esc(tipoDe(f)) + ' esta vacia.<br>' +
             'Busca algo arriba y toca <b>+</b> en el resultado.</div>';
   } else if(filtrando && !mostrados){
     html += '<div class="empty">Nada con <b>' + esc(filtro.trim()) + '</b> en ' + esc(f.name) + '.</div>';
@@ -963,9 +984,9 @@ function renderFolder(){
   } else {
     html += plural(total, 'elemento', 'elementos');
     if(hijas.length) html += ' en ' + plural(grupos, 'grupo', 'grupos');
-    html += ' &middot; <a data-nuevasub>subcarpeta nueva</a>';
+    html += ' &middot; <a data-nuevasub>' + esc(tipoHijaDe(f.id)) + ' nueva</a>';
     if(total > 1)             html += ' &middot; <a data-orden>ordenar</a>';
-    if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar carpeta</a>';
+    if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar ' + esc(tipoDe(f)) + '</a>';
   }
   html += '</div>';
 
@@ -1188,13 +1209,13 @@ function askGuardar(base){
               : '<span class="hueco3"></span>') +
             '<button class="pick arbol" data-folder="' + esc(f.id) + '"><span>' + esc(f.name) +
               '</span><small>' + f.items.length + '</small></button>' +
-            '<button class="mas" data-dentro="' + esc(f.id) + '" title="Subcarpeta nueva adentro de ' +
-              esc(f.name) + '">+</button>' +
+            '<button class="mas" data-dentro="' + esc(f.id) + '" title="' +
+              esc(tipoHijaDe(f.id)) + ' nueva adentro de ' + esc(f.name) + '">+</button>' +
           '</div>';
         if(hijas.length && abierta) nivel(f.id, prof + 1);
       });
     })(null, 0);
-    return html + '<button class="pick nueva" data-nueva>+ carpeta nueva</button>';
+    return html + '<button class="pick nueva" data-nueva>+ solapa nueva</button>';
   }
 
   var nuevoPadre = null;
@@ -1204,7 +1225,8 @@ function askGuardar(base){
     var madre = padre ? carpetaPorId(padre) : null;
     $('#carpetas').innerHTML =
       '<p class="dentrode">' +
-        (madre ? 'Nueva adentro de <b>' + esc(madre.name) + '</b>' : 'Carpeta nueva, de las de arriba') +
+        (madre ? esc(mayus(tipoHijaDe(padre))) + ' nueva adentro de <b>' + esc(madre.name) + '</b>'
+               : 'Solapa nueva, de las de arriba') +
       '</p>' +
       '<div class="newf">' +
         '<input type="text" id="nf" placeholder="Nombre" maxlength="30" autocomplete="off">' +
@@ -1477,10 +1499,11 @@ function askNewFolder(padre){
   }
 
   var madre = padre ? carpetaPorId(padre) : null;
+  var que = tipoHijaDe(padre || null);
   openModal(
-    '<h3>' + (madre ? 'Subcarpeta nueva' : 'Carpeta nueva') + '</h3><div class="body">' +
+    '<h3>' + esc(mayus(que)) + ' nueva</h3><div class="body">' +
       '<p>' + (madre ? 'Adentro de <b>' + esc(madre.name) + '</b>. Como se llama?'
-                     : 'Como se va a llamar?') + '</p>' +
+                     : 'Una solapa de las de arriba. Como se va a llamar?') + '</p>' +
       '<div class="newf">' +
         '<input type="text" id="nf2" placeholder="Ej: podcasts" maxlength="30" autocomplete="off">' +
         '<button data-crear2>Crear</button>' +
@@ -1521,9 +1544,9 @@ $('#panel').addEventListener('click', function(e){
   if(e.target.closest('[data-delfolder]')){
     var fd = carpetaPorId(current);
     var dentro = descendientes(fd.id);
-    confirmar('Borrar carpeta',
+    confirmar('Borrar ' + tipoDe(fd),
       'Se borra <b>' + esc(fd.name) + '</b>' +
-      (dentro.length ? ' con sus ' + plural(dentro.length, 'subcarpeta', 'subcarpetas') : '') +
+      (dentro.length ? ' con lo que tiene adentro (' + plural(dentro.length, 'carpeta', 'carpetas') + ')' : '') +
       (cuentaDe(fd) ? ' y ' + plural(cuentaDe(fd), 'elemento', 'elementos') : '') + '.',
       'Borrar',
       function(){
@@ -1541,6 +1564,7 @@ $('#panel').addEventListener('click', function(e){
 
   /* Ordenar y traer mas van antes del disparo: viven dentro de la fila y
      closest() las taparia. */
+  if((a = e.target.closest('[data-dentro2]'))){ askNewFolder(a.dataset.dentro2); return; }
   if((a = e.target.closest('[data-grupo]'))){
     var fg = carpetaPorId(current);
     if(!fg.plegados) fg.plegados = {};
