@@ -1481,8 +1481,11 @@ function askSync(){
   if(g.token && g.id){
     openModal(
       '<h3>Sincronizacion</h3><div class="body">' +
-        '<p>Conectada al gist <b>' + esc(String(g.id).slice(0, 8)) + '</b>. ' +
-        'Las carpetas y los recientes se unen entre tus dispositivos, sin pisarse.</p>' +
+        '<p>Conectada. Las carpetas y los recientes se unen entre tus ' +
+        'dispositivos, sin pisarse.</p>' +
+        '<p class="segnote">Id del gist, por si lo queres cargar a mano en otro dispositivo:</p>' +
+        '<input type="text" id="gistid" readonly value="' + esc(g.id) + '" ' +
+        'onclick="this.select()" style="width:100%;margin-bottom:10px">' +
         '<p class="segnote" id="syncmsg">' +
           (g.ultima ? 'Ultima vez: ' + esc(hace(g.ultima)) + '.' : 'Todavia no sincronizo.') + '</p>' +
         '<button class="close" data-ahora>Sincronizar ahora</button>' +
