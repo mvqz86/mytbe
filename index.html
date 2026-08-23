@@ -184,6 +184,17 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 /* Prendido va en rojo, que en esta app significa una sola cosa: esta al aire. */
 .vivo[aria-pressed="true"]{
   background:var(--red);border-color:var(--red);color:#fff}
+/* El de playlist se prende azul: el rojo ya significa "esta al aire". */
+#f-lista[aria-pressed="true"]{background:var(--sel);border-color:var(--sel);color:#fff}
+
+/* La barra del modo playlist: lo que llevas elegido y que hacer con eso. */
+.barralista{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--bar);border:1px solid var(--edge);border-top:none;
+  padding:8px 10px;font-size:12px;color:var(--ink-4)}
+.barralista[hidden]{display:none}
+.barralista b{color:var(--ink)}
+.barralista button{padding:8px 12px;font-size:12px}
+.barralista .der{margin-left:auto;display:flex;gap:6px}
 
 /* ---- panel ---- */
 .panel{
@@ -401,8 +412,12 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
     <div class="row2">
       <span class="hueco" aria-hidden="true">Buscar:</span>
       <button id="f-live" class="vivo" aria-pressed="false">&#128308; en vivo</button>
+      <button id="f-lista" class="vivo" aria-pressed="false">&#9654; playlist</button>
     </div>
   </div>
+
+  <!-- Aparece solo con el modo playlist prendido. -->
+  <div class="barralista" id="barralista" hidden></div>
 
   <div class="cinta" id="cinta" hidden>Sin conexion &middot; las carpetas se abren igual, buscar no</div>
 
@@ -825,6 +840,7 @@ function sombrasTabs(){
 
 function render(){
   completarDuras();
+  barraLista();
   renderTabs();
   if(results)                 renderResults();
   else if(current === RECIENTES) renderRecientes();
@@ -842,7 +858,13 @@ function renderRecientes(){
   } else {
     html = db.reproducidos.map(function(r, i){
       var ya = carpetaDe(r.ytId);
-      return '<div class="row compact" data-abrir="' + i + '">' +
+      var elegible = modoElegir && r.kind === 'video';
+      var marcado = elegible && posicionElegido(r.ytId) > -1;
+      return '<div class="row compact' +
+        (modoElegir ? ' eligiendo' : '') + (marcado ? ' marcado' : '') +
+        (modoElegir && !elegible ? ' apagada' : '') + '"' +
+        (elegible ? ' data-elegir="' + esc(r.ytId) + '" data-en=""' :
+         modoElegir ? '' : ' data-abrir="' + i + '"') + '>' +
         '<img class="th" src="' + esc(r.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
         '<div class="info">' +
           '<p class="ttl">' + esc(r.title || 'Sin titulo') + '</p>' +
@@ -855,9 +877,14 @@ function renderRecientes(){
             (ya ? ' &middot; <span class="saved">&#10003; en ' + esc(ya) + '</span>' : '') +
           '</div>' +
         '</div>' +
-        '<button class="add' + (ya ? ' on' : '') + '" data-guardar="' + i + '" title="' +
-          (ya ? 'Ya esta en ' + esc(ya) : 'Guardar en una carpeta') + '">' +
-          (ya ? '&#10003;' : '+') + '</button>' +
+        (modoElegir
+          ? (elegible
+              ? '<button class="add' + (marcado ? ' on' : '') + '">' +
+                (marcado ? (posicionElegido(r.ytId) + 1) : '+') + '</button>'
+              : '<span class="add vacio"></span>')
+          : '<button class="add' + (ya ? ' on' : '') + '" data-guardar="' + i + '" title="' +
+            (ya ? 'Ya esta en ' + esc(ya) : 'Guardar en una carpeta') + '">' +
+            (ya ? '&#10003;' : '+') + '</button>') +
       '</div>';
     }).join('');
   }
@@ -1067,26 +1094,21 @@ function renderFolder(){
 
   html += '<div class="foot">';
   if(modoElegir){
-    html += elegidos.length
-      ? plural(elegidos.length, 'elegido', 'elegidos') +
-        ' &middot; <a data-playelegidos>&#9654; reproducir</a>' +
-        ' &middot; <a data-listaelegidos>guardar como lista</a>'
-      : 'Toca los que quieras, de la carpeta que sea';
-    html += ' &middot; <a data-elegirmodo>listo</a>';
+    /* Lo que se hace con lo elegido vive en la barra de arriba, que se ve
+       siempre; el pie se scrollea y ahi el boton se pierde. */
+    html += 'Marca lo que quieras y usa la barra de arriba';
   } else if(modoOrden){
     html += 'Move cada uno con las flechas &middot; <a data-orden>listo</a>';
   } else if(filtrando){
     html += plural(mostrados, 'elemento', 'elementos') + ' con ese texto';
     if(videosVisibles(f).length > 1){
-      html += ' &middot; <a data-playtodo>&#9654; reproducir</a>' +
-              ' &middot; <a data-elegirmodo>elegir</a>';
+      html += ' &middot; <a data-playtodo>&#9654; reproducir</a>';
     }
   } else {
     html += plural(total, 'elemento', 'elementos');
     if(hijas.length) html += ' en ' + plural(grupos, 'grupo', 'grupos');
     if(videosVisibles(f).length > 1){
-      html += ' &middot; <a data-playtodo>&#9654; reproducir</a>' +
-              ' &middot; <a data-elegirmodo>elegir</a>';
+      html += ' &middot; <a data-playtodo>&#9654; reproducir todo</a>';
     }
     html += ' &middot; <a data-nuevasub>' + esc(tipoHijaDe(f.id)) + ' nueva</a>';
     if(total > 1)             html += ' &middot; <a data-orden>ordenar</a>';
@@ -1702,30 +1724,13 @@ $('#panel').addEventListener('click', function(e){
     var ya = posicionElegido(a.dataset.elegir);
     if(ya > -1) elegidos.splice(ya, 1);
     else {
+      /* Puede venir de una carpeta o de recientes, que no es una carpeta. */
       var duena = carpetaPorId(a.dataset.en);
-      var cual = duena.items.filter(function(i){ return i.ytId === a.dataset.elegir; })[0];
+      var lista = duena ? duena.items : db.reproducidos;
+      var cual = lista.filter(function(i){ return i.ytId === a.dataset.elegir; })[0];
       if(cual) elegidos.push({ytId:cual.ytId, title:cual.title, thumb:cual.thumb || ''});
     }
     render();
-    return;
-  }
-  if(e.target.closest('[data-elegirmodo]')){
-    modoElegir = !modoElegir;
-    if(!modoElegir) elegidos = [];
-    modoOrden = false;
-    render();
-    return;
-  }
-  if(e.target.closest('[data-playelegidos]')){ reproducirLista(elegidos, 'Elegidos'); return; }
-  if(e.target.closest('[data-listaelegidos]')){
-    askGuardar({
-      lista: true,
-      ytIds: elegidos.map(function(i){ return i.ytId; }),
-      aMano: true,
-      title: 'Elegidos',
-      channel: '',
-      thumb: elegidos[0] ? elegidos[0].thumb : ''
-    });
     return;
   }
   if(e.target.closest('[data-comolista]')){
@@ -2650,6 +2655,41 @@ if('serviceWorker' in navigator){
 }
 
 /* ============ conexion ============ */
+function barraLista(){
+  var b = $('#barralista');
+  b.hidden = !modoElegir;
+  $('#f-lista').setAttribute('aria-pressed', modoElegir ? 'true' : 'false');
+  if(!modoElegir) return;
+  b.innerHTML = elegidos.length
+    ? '<b>' + plural(elegidos.length, 'elegido', 'elegidos') + '</b>' +
+      '<span class="der">' +
+        '<button data-playelegidos>&#9654; reproducir</button>' +
+        '<button data-listaelegidos>guardar</button>' +
+      '</span>'
+    : 'Toca los que quieras agregar, de donde sea';
+}
+
+$('#barralista').addEventListener('click', function(e){
+  if(e.target.closest('[data-playelegidos]')){ reproducirLista(elegidos, 'Playlist'); return; }
+  if(e.target.closest('[data-listaelegidos]')){
+    askGuardar({
+      lista: true,
+      ytIds: elegidos.map(function(i){ return i.ytId; }),
+      aMano: true,
+      title: 'Playlist',
+      channel: '',
+      thumb: elegidos[0] ? elegidos[0].thumb : ''
+    });
+  }
+});
+
+$('#f-lista').onclick = function(){
+  modoElegir = !modoElegir;
+  if(!modoElegir) elegidos = [];
+  modoOrden = false;
+  render();
+};
+
 function estadoRed(){ $('#cinta').hidden = navigator.onLine; }
 window.addEventListener('online',  estadoRed);
 window.addEventListener('offline', estadoRed);

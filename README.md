@@ -43,13 +43,16 @@ cuota: es una direccion.
 - **▶ reproducir**, en el pie, reproduce todo lo que se ve, en ese orden. Con
   el filtro puesto, reproduce lo filtrado: se arma una lista escribiendo tres
   letras.
-- **elegir**, en el pie, prende el modo de eleccion: las filas dejan de
-  disparar y se marcan con un toque, numeradas en el orden en que las tocaste,
-  que es el orden en que van a sonar. Vale mezclar carpetas y hasta solapas
-  distintas, y el filtro sigue andando mientras elegis: buscas, marcas, borras
-  el filtro, buscas otra cosa y marcas de nuevo.
-- **guardar como lista** guarda eso mismo como un item, con nombre propio, en
-  la solapa o carpeta que elijas. Despues se toca y suena todo seguido.
+- El boton **playlist**, al lado de *en vivo*, prende el modo de armado: las
+  filas dejan de disparar y se marcan con un toque, numeradas en el orden en
+  que las tocaste, que es el orden en que van a sonar. Vale mezclar carpetas,
+  solapas y hasta lo que quedo en Recientes, y el filtro sigue andando
+  mientras marcas: buscas, marcas, borras el filtro, buscas otra cosa y marcas
+  de nuevo.
+- Arriba aparece una barra con lo que llevas elegido y dos botones:
+  **reproducir**, que lo manda entero a YouTube, y **guardar**, que lo deja
+  como un item con nombre propio en la solapa o carpeta que elijas. Despues se
+  toca y suena todo seguido.
 
 Las radios quedan afuera: son canales y no tienen un id de video estable. El
 tope es de unos 50 por lista; si hay mas, van los primeros 50 y se avisa. La
