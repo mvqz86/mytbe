@@ -639,7 +639,8 @@ function anotarReproducido(item){
   db.reproducidos = db.reproducidos.filter(function(r){ return r.ytId !== item.ytId; });
   db.reproducidos.unshift({
     ytId: item.ytId, kind: item.kind, title: item.title || '',
-    channel: item.channel || '', thumb: item.thumb || '', cuando: Date.now()
+    channel: item.channel || '', thumb: item.thumb || '',
+    dura: item.dura || '', cuando: Date.now()
   });
   podarReproducidos();
   save();
@@ -776,6 +777,7 @@ function sombrasTabs(){
 }
 
 function render(){
+  completarDuras();
   renderTabs();
   if(results)                 renderResults();
   else if(current === RECIENTES) renderRecientes();
@@ -798,6 +800,7 @@ function renderRecientes(){
         '<div class="info">' +
           '<p class="ttl">' + esc(r.title || 'Sin titulo') + '</p>' +
           '<div class="sub">' + esc(hace(r.cuando)) +
+            (r.dura ? ' &middot; <b class="dura">' + esc(r.dura) + '</b>' : '') +
             (r.channel ? ' &middot; ' + esc(r.channel) : '') +
             (ya ? ' &middot; <span class="saved">&#10003; en ' + esc(ya) + '</span>' : '') +
           '</div>' +
@@ -814,6 +817,40 @@ function renderRecientes(){
   html += '</div>';
 
   $('#panel').innerHTML = html;
+}
+
+/* Lo que se guardo antes de que existiera la duracion no la tiene. Se
+   completa sola: videos.list cuesta 1 unidad para 50 juntos, y a los que la
+   API no conteste se les anota vacio para no volver a preguntar por ellos. */
+var pidiendoDuras = false;
+
+function completarDuras(){
+  if(pidiendoDuras || !navigator.onLine || !getKey()) return;
+
+  var faltan = [];
+  db.folders.forEach(function(f){
+    f.items.forEach(function(it){
+      if(it.kind !== 'radio' && it.dura === undefined && faltan.length < 50) faltan.push(it);
+    });
+  });
+  if(!faltan.length) return;
+
+  pidiendoDuras = true;
+  fetch('https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=' +
+        encodeURIComponent(faltan.map(function(it){ return it.ytId; }).join(',')) +
+        '&key=' + encodeURIComponent(getKey()))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var mapa = {};
+      (d.items || []).forEach(function(v){
+        mapa[v.id] = duracion(v.contentDetails && v.contentDetails.duration);
+      });
+      faltan.forEach(function(it){ it.dura = mapa[it.ytId] || ''; });
+      pidiendoDuras = false;
+      save();
+      render();          /* si quedan mas de 50, la proxima vuelta sigue */
+    })
+    .catch(function(){ pidiendoDuras = false; });
 }
 
 /* ---- carpeta ----
@@ -851,7 +888,9 @@ function renderFolder(){
       '<div class="info">' +
         '<p class="ttl">' + esc(it.title) + '</p>' +
         '<div class="sub">' +
-          (it.kind === 'radio' ? '<span class="live">en vivo</span>' : esc(it.channel)) +
+          (it.kind === 'radio'
+            ? '<span class="live">en vivo</span>'
+            : (it.dura ? '<b class="dura">' + esc(it.dura) + '</b> &middot; ' : '') + esc(it.channel)) +
         '</div>' +
       '</div>' +
       (modoOrden
@@ -1103,7 +1142,8 @@ function askSave(idx){
     channelId: s.channelId,
     title:     limpiarTexto(s.title),
     channel:   limpiarTexto(s.channelTitle),
-    thumb:     (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || ''
+    thumb:     (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || '',
+    dura:      it.dura || ''
   });
 }
 
@@ -1114,7 +1154,8 @@ function deReciente(r){
     channelId: r.kind === 'radio' ? r.ytId : '',
     title:     r.title,
     channel:   r.channel || r.title,
-    thumb:     r.thumb
+    thumb:     r.thumb,
+    dura:      r.dura || ''
   };
 }
 
@@ -1200,6 +1241,8 @@ function askGuardar(base){
       title:   kind === 'radio' ? base.channel : base.title,
       channel: base.channel,
       thumb:   base.thumb || '',
+      /* Una radio no dura: sigue al aire. */
+      dura:    kind === 'radio' ? '' : (base.dura || ''),
       addedAt: Date.now()
     };
     folder.items.unshift(nuevo);
@@ -1540,7 +1583,8 @@ $('#panel').addEventListener('click', function(e){
       ytId:    envivo ? sn.channelId : rr.id.videoId,
       title:   limpiarTexto(envivo ? sn.channelTitle : sn.title),
       channel: limpiarTexto(sn.channelTitle),
-      thumb:   (sn.thumbnails && sn.thumbnails.medium && sn.thumbnails.medium.url) || ''
+      thumb:   (sn.thumbnails && sn.thumbnails.medium && sn.thumbnails.medium.url) || '',
+      dura:    envivo ? '' : (rr.dura || '')
     });
     return;
   }
