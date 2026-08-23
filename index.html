@@ -998,7 +998,10 @@ function askKey(){
 }
 
 /* ============ eventos ============ */
-$('#go').onclick = doSearch;
+/* Ojo: doSearch recibe el token de la pagina siguiente. Enganchado derecho al
+   boton le llega el evento del click en su lugar, cree que le piden "traer
+   mas" de una busqueda que no existe, y no busca nada. */
+$('#go').onclick = function(){ doSearch(); };
 $('#q').addEventListener('keydown', function(e){
   if(e.key === 'Enter'){ e.target.blur(); doSearch(); }
 });
