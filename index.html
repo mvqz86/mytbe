@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#dfe6ec">
 <title>mytbe</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="mytbe">
 <style>
 /* ===========================================================
    Estetica YouTube 2005: Arial chica, cajas plateadas con
@@ -99,6 +105,9 @@ select{
 
 .empty{color:#777;font-size:12px;text-align:center;padding:46px 14px;line-height:1.7}
 .foot{margin-top:14px;padding-top:10px;border-top:1px solid #e2e2e2;font-size:11px;color:#777}
+/* Pie de pagina, como los del sitio de la epoca */
+.pagefoot{text-align:center;font-size:11px;color:#6b7a86;padding:14px 8px 4px;line-height:2}
+.pagefoot a{margin:0 4px;padding:4px 2px;display:inline-block}
 .loading{text-align:center;padding:44px;color:#777;font-size:12px}
 
 /* ---- modal ---- */
@@ -156,6 +165,11 @@ select{
 
   <div class="panel" id="panel"></div>
 
+  <div class="pagefoot">
+    respaldo: <a id="exp">descargar copia</a> &middot; <a id="imp">restaurar copia</a>
+  </div>
+  <input type="file" id="file" accept="application/json,.json" hidden>
+
 </div>
 
 <div class="modal" id="modal" hidden><div class="box" id="box"></div></div>
@@ -202,6 +216,7 @@ function esc(s){
   });
 }
 function today(){ return new Date().toISOString().slice(0,10); }
+function plural(n, sing, pl){ return n + ' ' + (n === 1 ? sing : pl); }
 function renderQuota(){
   var n = db.quota.date === today() ? db.quota.count : 0;
   $('#quota').textContent = n + '/100 hoy';
@@ -286,7 +301,7 @@ function renderFolder(){
     }).join('');
   }
 
-  html += '<div class="foot">' + f.items.length + ' en esta carpeta';
+  html += '<div class="foot">' + plural(f.items.length, 'elemento', 'elementos') + ' en esta carpeta';
   if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar carpeta</a>';
   html += '</div>';
 
@@ -483,7 +498,8 @@ $('#panel').addEventListener('click', function(e){
   if(e.target.closest('[data-delfolder]')){
     var fd = db.folders.filter(function(x){ return x.id === current; })[0];
     if(!confirm('Borrar la carpeta "' + fd.name + '"' +
-                (fd.items.length ? ' y sus ' + fd.items.length + ' elementos' : '') + '?')) return;
+                (fd.items.length ? ' y sus ' + plural(fd.items.length, 'elemento', 'elementos') : '') +
+                '?')) return;
     db.folders = db.folders.filter(function(x){ return x.id !== fd.id; });
     current = db.folders[0].id; save(); render();
     return;
@@ -498,6 +514,70 @@ $('#panel').addEventListener('click', function(e){
     launch(fo.items.filter(function(i){ return i.ytId === a.dataset.open; })[0]);
   }
 });
+
+/* ============ respaldo ============
+   Las carpetas viven solo en localStorage: si se limpian los datos del
+   navegador, se pierden. Esto es la unica copia posible. */
+$('#exp').onclick = function(){
+  var total = db.folders.reduce(function(a,f){ return a + f.items.length; }, 0);
+  if(!total && !confirm('No hay nada guardado todavia. Descargar igual?')) return;
+
+  var datos = JSON.stringify({
+    app:'mytbe', version:1, fecha:new Date().toISOString(), folders:db.folders
+  }, null, 2);
+
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([datos], {type:'application/json'}));
+  a.download = 'mytbe-respaldo-' + today() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+};
+
+$('#imp').onclick = function(){ $('#file').click(); };
+
+$('#file').onchange = function(e){
+  var f = e.target.files[0];
+  e.target.value = '';               /* permite reelegir el mismo archivo */
+  if(!f) return;
+
+  var fr = new FileReader();
+  fr.onload = function(){
+    var d;
+    try { d = JSON.parse(fr.result); }
+    catch(err){ alert('Ese archivo no es un respaldo valido.'); return; }
+
+    /* Nos quedamos solo con lo que tiene forma de carpeta, por si el archivo
+       viene de una version distinta o esta a medio editar. */
+    var folders = (d && d.folders || []).filter(function(x){
+      return x && x.id && x.name && Object.prototype.toString.call(x.items) === '[object Array]';
+    });
+    if(!folders.length){ alert('El archivo no contiene carpetas.'); return; }
+
+    var total = folders.reduce(function(a,x){ return a + x.items.length; }, 0);
+    if(!confirm('Restaurar ' + plural(folders.length, 'carpeta', 'carpetas') +
+                ' con ' + plural(total, 'elemento', 'elementos') + '?\n\n' +
+                'Reemplaza todo lo que tenes guardado ahora.')) return;
+
+    db.folders = folders;
+    save();
+    current = db.folders[0].id;
+    results = null;
+    render();
+    alert('Respaldo restaurado.');
+  };
+  fr.readAsText(f);
+};
+
+/* ============ instalable ============
+   Sin service worker, Android la agrega como acceso directo con barra de
+   navegador en vez de app con icono propio. */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
 
 renderQuota();
 render();
