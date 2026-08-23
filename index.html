@@ -1403,19 +1403,37 @@ function crearGist(token, datos){
   }).then(revisar);
 }
 
+/* GitHub explica el motivo en el cuerpo. Tirarlo y quedarse con el numero
+   convierte cualquier problema de permisos en una adivinanza. */
 function revisar(r){
   if(r.ok) return r.json();
-  var e = new Error('HTTP ' + r.status);
-  e.status = r.status;
-  throw e;
+  return r.json().catch(function(){ return {}; }).then(function(d){
+    var e = new Error(d.message || ('HTTP ' + r.status));
+    e.status = r.status;
+    e.github = d.message || '';
+    throw e;
+  });
 }
 
 function errorSync(err){
   if(err.status === 401) return 'ese token no sirve, fijate que este completo y sea clasico';
-  if(err.status === 403) return 'a ese token le falta el permiso gist';
-  if(err.status === 404) return 'ese gist ya no existe';
+  if(err.status === 403 || err.status === 404) return 'a ese token le falta el permiso gist';
   if(err.status === 422) return 'GitHub rechazo el contenido';
   return 'no se pudo sincronizar';
+}
+
+/* Al conectar conviene ser mas explicito que en el uso diario: es el momento
+   en que algo esta mal configurado y hay que decir donde mirar. */
+function mensajeConexion(err, teniaId){
+  if(err.status === 404 && teniaId) return 'No hay ningun gist con ese id.';
+  if(err.status === 404 || err.status === 403)
+    return 'GitHub no deja tocar gists con ese token: casi siempre es que no quedo ' +
+           'marcado el permiso gist. Entra al token en github.com/settings/tokens, ' +
+           'marca la casilla gist y toca Update token.' +
+           (err.github ? ' GitHub dice: "' + err.github + '".' : '');
+  if(err.status === 401)
+    return 'Ese token no sirve. Fijate que este completo y que sea clasico, no fine-grained.';
+  return 'No anduvo: ' + errorSync(err) + '.' + (err.github ? ' GitHub dice: "' + err.github + '".' : '');
 }
 
 /* ---- el ciclo ---- */
@@ -1592,11 +1610,7 @@ function askSync(){
           avisar('Listo', 'Sincronizacion conectada. En los otros dispositivos pega el ' +
                           'mismo token en este mismo cuadro, o usa el enlace que copia.');
         })
-        .catch(function(err){
-          decir(err.status === 404
-            ? 'No hay ningun gist con ese id.'
-            : 'No anduvo: ' + errorSync(err) + '.');
-        });
+        .catch(function(err){ decir(mensajeConexion(err, !!id)); });
     });
 
   $('#tokin').focus();
