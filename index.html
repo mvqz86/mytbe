@@ -102,6 +102,18 @@ select{
    asi que no compiten con el area de disparo. "eliminar" ademas pide confirmar. */
 .acts{margin-top:5px;font-size:11px}
 .acts a{margin-right:12px;padding:3px 0;display:inline-block}
+.saved{color:#2e7d32;font-size:11px}
+
+/* ---- lista guardada: compacta, para ver muchas de un vistazo ----
+   Sigue midiendo mas de 50px de alto, que es lo minimo para tocar sin mirar. */
+.row.compact{padding:6px 4px;align-items:center;gap:9px}
+.row.compact .th{width:54px;height:40px}
+.row.compact .ttl{-webkit-line-clamp:1;margin:0 0 1px}
+.row.compact .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-size:10.5px;line-height:1.5}
+.x{background:none;border:none;color:#a8a8a8;font-size:19px;line-height:1;
+  padding:9px 7px;flex:none;border-radius:3px}
+.x:active{background:#f0f0f0;color:#cc181e}
 
 .empty{color:#777;font-size:12px;text-align:center;padding:46px 14px;line-height:1.7}
 .foot{margin-top:14px;padding-top:10px;border-top:1px solid #e2e2e2;font-size:11px;color:#777}
@@ -125,8 +137,22 @@ select{
 .pick b{display:block;font-size:12px;margin-bottom:2px}
 .pick small{color:#666;font-size:11px;line-height:1.4;display:block}
 .pick.sel{border:2px solid #cc181e;background:#fff8f8}
+.pick small{display:block;color:#8a8a8a;font-size:10.5px;margin-top:2px}
+.pick.nueva,.pick.volver{text-align:center;color:#0000cc;background:#fff}
+.pick.nueva{border-style:dashed}
 .hint{font-size:11px;color:#666;margin:10px 0 6px;font-weight:bold}
 .box .close{width:100%;margin-top:4px}
+
+/* Control segmentado radio / stream, en lugar de dos botones grandes */
+.seg{display:flex;border:1px solid #7f9db9;border-radius:3px;overflow:hidden;margin-bottom:7px}
+.seg button{flex:1;border:none;border-radius:0;padding:11px 6px;font-size:12px;color:#444;
+  background:linear-gradient(#fdfdfd,#e4e4e4)}
+.seg button + button{border-left:1px solid #a8bed2}
+.seg button.on{background:#cc181e;color:#fff;font-weight:bold}
+.box p.segnote{font-size:11px;color:#777;margin:0 0 13px;line-height:1.45}
+
+.newf{display:flex;gap:6px;margin-bottom:6px}
+.newf input{flex:1;min-width:0}
 </style>
 </head>
 <body>
@@ -260,6 +286,16 @@ function launch(item){
   window.open(urlFor(item), '_blank', 'noopener');
 }
 
+/* Nombre de la carpeta donde ya esta guardado ese id, o null. */
+function carpetaDe(ytId){
+  if(!ytId) return null;
+  for(var i = 0; i < db.folders.length; i++){
+    var hit = db.folders[i].items.some(function(x){ return x.ytId === ytId; });
+    if(hit) return db.folders[i].name;
+  }
+  return null;
+}
+
 /* ============ estado de vista ============ */
 var current = db.folders[0].id;   /* carpeta abierta */
 var results = null;               /* si hay busqueda activa */
@@ -287,17 +323,16 @@ function renderFolder(){
            'Busca algo arriba y toca <b>guardar</b> en el resultado.</div>';
   } else {
     html = f.items.map(function(it){
-      return '<div class="row" data-open="' + esc(it.ytId) + '">' +
+      return '<div class="row compact" data-open="' + esc(it.ytId) + '">' +
         '<img class="th" src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
         '<div class="info">' +
           '<p class="ttl"><a>' + esc(it.title) + '</a></p>' +
           '<div class="sub">' +
-            (it.kind === 'radio'
-              ? '<span class="live">radio en vivo</span> &middot; abre lo que este al aire'
-              : 'de <b>' + esc(it.channel) + '</b>') +
+            (it.kind === 'radio' ? '<span class="live">en vivo</span>' : esc(it.channel)) +
           '</div>' +
-          '<div class="acts"><a data-rm="' + esc(it.ytId) + '">eliminar</a></div>' +
-        '</div></div>';
+        '</div>' +
+        '<button class="x" data-rm="' + esc(it.ytId) + '" title="Eliminar">&times;</button>' +
+      '</div>';
     }).join('');
   }
 
@@ -317,13 +352,18 @@ function renderResults(){
   html += results.items.map(function(it, i){
     var s = it.snippet, live = s.liveBroadcastContent === 'live';
     var th = (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || PLACEHOLDER;
+    /* Un vivo se puede haber guardado como canal o como video: miramos los dos. */
+    var ya = carpetaDe(it.id.videoId) || carpetaDe(s.channelId);
     return '<div class="row" data-play="' + i + '">' +
       '<img class="th" src="' + esc(th) + '" alt="" onerror="imgFallback(this)">' +
       '<div class="info">' +
         '<p class="ttl"><a>' + esc(s.title) + '</a></p>' +
         '<div class="sub">' + (live ? '<span class="live">EN VIVO</span> &middot; ' : '') +
           'de <b>' + esc(s.channelTitle) + '</b></div>' +
-        '<div class="acts"><a data-save="' + i + '">guardar</a></div>' +
+        '<div class="acts">' +
+          (ya ? '<span class="saved">&#10003; guardado en ' + esc(ya) + '</span>'
+              : '<a data-save="' + i + '">guardar</a>') +
+        '</div>' +
       '</div></div>';
   }).join('');
 
@@ -384,64 +424,121 @@ function askSave(idx){
      que la transmision se reinicia, el canal no. */
   var kind = live ? 'radio' : 'video';
 
-  function body(){
-    return '<h3>Guardar</h3><div class="body">' +
-      '<p>' + esc(s.title.slice(0,90)) + '</p>' +
-      (live ?
-        '<button class="pick ' + (kind==='radio'?'sel':'') + '" data-kind="radio">' +
-          '<b>Guardar la radio</b><small>Sigue al canal. Abre lo que este al aire, siempre.</small></button>' +
-        '<button class="pick ' + (kind==='video'?'sel':'') + '" data-kind="video">' +
-          '<b>Guardar este stream</b><small>Solo esta transmision. Muere cuando termine.</small></button>' +
-        '<div class="hint">En que carpeta?</div>'
-        : '<div class="hint">En que carpeta?</div>') +
-      db.folders.map(function(f){
-        return '<button class="pick" data-folder="' + esc(f.id) + '">' + esc(f.name) + '</button>';
-      }).join('') +
-      '<button class="close" data-cancel>Cancelar</button></div>';
+  var NOTA = {
+    radio: 'Sigue al canal: abre lo que este al aire, hoy y dentro de un ano.',
+    video: 'Guarda esta transmision puntual. Deja de servir cuando termine.'
+  };
+
+  function listaCarpetas(){
+    return db.folders.map(function(f){
+      return '<button class="pick" data-folder="' + esc(f.id) + '">' + esc(f.name) +
+             '<small>' + plural(f.items.length, 'elemento', 'elementos') + '</small></button>';
+    }).join('') +
+    '<button class="pick nueva" data-nueva>+ carpeta nueva</button>';
   }
 
-  openModal(body(), function(el){
-    el.addEventListener('click', function(e){
+  function panelNueva(){
+    $('#carpetas').innerHTML =
+      '<div class="newf">' +
+        '<input type="text" id="nf" placeholder="Nombre de la carpeta" maxlength="30" autocomplete="off">' +
+        '<button data-crear>Crear</button>' +
+      '</div>' +
+      '<button class="pick volver" data-volver>&laquo; elegir una existente</button>';
+    var nf = $('#nf');
+    nf.focus();
+    nf.onkeydown = function(ev){ if(ev.key === 'Enter'){ ev.preventDefault(); crearYGuardar(); } };
+  }
+
+  function crearYGuardar(){
+    var n = $('#nf').value.trim();
+    if(!n){ $('#nf').focus(); return; }
+    var nueva = {id:'f' + Date.now(), name:n, items:[]};
+    db.folders.push(nueva);
+    guardarEn(nueva);
+  }
+
+  function guardarEn(folder){
+    var ytId = kind === 'radio' ? s.channelId : it.id.videoId;
+    if(folder.items.some(function(x){ return x.ytId === ytId; })){
+      closeModal(); alert('Ya estaba en ' + folder.name); return;
+    }
+    var nuevo = {
+      kind: kind,
+      ytId: ytId,
+      title:   kind === 'radio' ? s.channelTitle : s.title,
+      channel: s.channelTitle,
+      thumb:   (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || '',
+      addedAt: Date.now()
+    };
+    folder.items.unshift(nuevo);
+    save();
+    closeModal();
+    /* Nos quedamos en los resultados: guardar dos cosas de la misma busqueda
+       no puede costar otra busqueda. La fila ya va a decir donde quedo. */
+    render();
+
+    if(kind === 'radio'){
+      fetchChannelAvatar(ytId).then(function(url){
+        if(!url) return;
+        nuevo.thumb = url; save(); render();
+      });
+    }
+  }
+
+  openModal(
+    '<h3>Guardar</h3><div class="body">' +
+      '<p class="what">' + esc(s.title.slice(0,90)) + '</p>' +
+      (live ?
+        '<div class="seg" id="seg">' +
+          '<button data-kind="radio" class="on">la radio</button>' +
+          '<button data-kind="video">este stream</button>' +
+        '</div>' +
+        '<p class="segnote" id="segnote">' + NOTA.radio + '</p>' : '') +
+      '<div class="hint">En que carpeta?</div>' +
+      '<div id="carpetas">' + listaCarpetas() + '</div>' +
+      '<button class="close" data-cancel>Cancelar</button>' +
+    '</div>',
+    function(e){
+      /* El cambio radio/video actualiza en el lugar. Antes redibujaba el menu
+         entero en cada toque, que es parte de por que se sentia trabado. */
       var k = e.target.closest('[data-kind]');
-      if(k){ kind = k.dataset.kind; el.innerHTML = body(); return; }
-      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
-      var fb = e.target.closest('[data-folder]');
-      if(!fb) return;
-
-      var folder = db.folders.filter(function(x){ return x.id === fb.dataset.folder; })[0];
-      var ytId = kind === 'radio' ? s.channelId : it.id.videoId;
-      if(folder.items.some(function(x){ return x.ytId === ytId; })){
-        closeModal(); alert('Ya estaba en ' + folder.name); return;
-      }
-      var nuevo = {
-        kind: kind,
-        ytId: ytId,
-        title:   kind === 'radio' ? s.channelTitle : s.title,
-        channel: s.channelTitle,
-        thumb:   (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || '',
-        addedAt: Date.now()
-      };
-      folder.items.unshift(nuevo);
-      save(); closeModal();
-      current = folder.id; results = null; render();
-
-      if(kind === 'radio'){
-        fetchChannelAvatar(ytId).then(function(url){
-          if(!url) return;
-          nuevo.thumb = url; save(); if(!results) render();
+      if(k){
+        kind = k.dataset.kind;
+        [].forEach.call($('#seg').children, function(b){
+          b.classList.toggle('on', b.dataset.kind === kind);
         });
+        $('#segnote').textContent = NOTA[kind];
+        return;
       }
+      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+      if(e.target.closest('[data-nueva]')){ panelNueva(); return; }
+      if(e.target.closest('[data-volver]')){ $('#carpetas').innerHTML = listaCarpetas(); return; }
+      if(e.target.closest('[data-crear]')){ crearYGuardar(); return; }
+
+      var fb = e.target.closest('[data-folder]');
+      if(fb) guardarEn(db.folders.filter(function(x){ return x.id === fb.dataset.folder; })[0]);
     });
-  });
 }
 
-/* ============ modal ============ */
-function openModal(html, wire){
-  var box = $('#box');
-  box.innerHTML = html; $('#modal').hidden = false;
-  if(wire) wire(box);
+/* ============ modal ============
+   Un unico escuchador para toda la vida de la pagina. Antes se agregaba uno
+   nuevo en cada apertura y se acumulaban: al cuarto guardado, un solo toque
+   ejecutaba el handler cuatro veces y disparaba alertas de "ya estaba". */
+var modalHandler = null;
+
+$('#box').addEventListener('click', function(e){
+  if(modalHandler) modalHandler(e);
+});
+
+function openModal(html, handler){
+  $('#box').innerHTML = html;
+  modalHandler = handler || null;
+  $('#modal').hidden = false;
 }
-function closeModal(){ $('#modal').hidden = true; }
+function closeModal(){
+  $('#modal').hidden = true;
+  modalHandler = null;
+}
 $('#modal').addEventListener('click', function(e){ if(e.target.id === 'modal') closeModal(); });
 
 function askKey(){
@@ -473,13 +570,41 @@ $('#keylink').onclick = askKey;
 $('#tabs').addEventListener('click', function(e){
   var t = e.target.closest('[data-tab]');
   if(t){ current = t.dataset.tab; results = null; render(); return; }
-  if(e.target.closest('[data-newfolder]')){
-    var n = prompt('Nombre de la carpeta nueva:');
-    if(!n || !n.trim()) return;
-    var f = {id:'f' + Date.now(), name:n.trim(), items:[]};
-    db.folders.push(f); save(); current = f.id; results = null; render();
-  }
+  if(e.target.closest('[data-newfolder]')) askNewFolder();
 });
+
+/* ============ carpeta nueva ============
+   Con prompt() el dialogo del sistema queda feo dentro de la app instalada,
+   asi que usamos el mismo cuadro que el resto. */
+function askNewFolder(){
+  function crear(){
+    var n = $('#nf2').value.trim();
+    if(!n){ $('#nf2').focus(); return; }
+    var f = {id:'f' + Date.now(), name:n, items:[]};
+    db.folders.push(f);
+    save();
+    closeModal();
+    current = f.id; results = null; render();
+  }
+
+  openModal(
+    '<h3>Carpeta nueva</h3><div class="body">' +
+      '<p>Como se va a llamar?</p>' +
+      '<div class="newf">' +
+        '<input type="text" id="nf2" placeholder="Ej: podcasts" maxlength="30" autocomplete="off">' +
+        '<button data-crear2>Crear</button>' +
+      '</div>' +
+      '<button class="close" data-cancel>Cancelar</button>' +
+    '</div>',
+    function(e){
+      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+      if(e.target.closest('[data-crear2]')) crear();
+    });
+
+  var i = $('#nf2');
+  i.focus();
+  i.onkeydown = function(ev){ if(ev.key === 'Enter'){ ev.preventDefault(); crear(); } };
+}
 
 /* Ojo con el orden: la fila entera es el area de disparo, asi que las acciones
    que viven dentro de ella se evaluan primero o quedarian tapadas por closest(). */
