@@ -33,10 +33,11 @@ el telefono usando un **gist privado** de tu cuenta de GitHub.
    github.com/settings/tokens -> *Generate new token (classic)* -> marcar solo
    **gist**.
 2. En la app, pie de pagina: *sincronizacion -> configurar*, pegar el token y
-   tocar **Conectar**. Se crea el gist solo.
-3. En los otros dispositivos, el mismo cuadro con el mismo token y el id del
-   gist; o mas rapido, *Copiar enlace para otro dispositivo* y abrirlo alla
-   una vez.
+   tocar **Conectar**. Si la cuenta todavia no tiene un gist de mytbe, se crea
+   solo.
+3. En los otros dispositivos, el **mismo token** en el mismo cuadro: la app
+   busca en la cuenta y se engancha al gist que ya existe. Tambien sirve
+   *Copiar enlace para otro dispositivo* y abrirlo alla una vez.
 
 La fusion es por elemento y no por archivo: guardar en un dispositivo y
 borrar en otro conviven sin pisarse, porque cada item lleva su hora y cada

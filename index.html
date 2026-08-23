@@ -1379,6 +1379,18 @@ function subirGist(g, datos){
   }).then(revisar);
 }
 
+/* Con el mismo token, el segundo dispositivo puede encontrar solo el gist
+   que hizo el primero: no hace falta que nadie copie un id a ningun lado. */
+function buscarGist(token){
+  return fetch('https://api.github.com/gists?per_page=100', {
+    headers: {Authorization:'Bearer ' + token, Accept:'application/vnd.github+json'}
+  }).then(revisar).then(function(lista){
+    for(var i = 0; i < (lista || []).length; i++)
+      if(lista[i].files && lista[i].files['mytbe.json']) return lista[i].id;
+    return '';
+  });
+}
+
 function crearGist(token, datos){
   return fetch('https://api.github.com/gists', {
     method:'POST',
@@ -1399,7 +1411,7 @@ function revisar(r){
 }
 
 function errorSync(err){
-  if(err.status === 401) return 'el token no sirve o vencio';
+  if(err.status === 401) return 'ese token no sirve, fijate que este completo y sea clasico';
   if(err.status === 403) return 'a ese token le falta el permiso gist';
   if(err.status === 404) return 'ese gist ya no existe';
   if(err.status === 422) return 'GitHub rechazo el contenido';
@@ -1514,53 +1526,77 @@ function askSync(){
     return;
   }
 
+  /* Un solo campo: el id del gist es cosa de la app, no del usuario. Si ya
+     hay uno hecho con este token lo encuentra; si no, lo crea. */
   openModal(
     '<h3>Sincronizacion</h3><div class="body">' +
       '<p>Guarda tus carpetas en un <b>gist privado</b> de tu cuenta de GitHub, ' +
       'para tenerlas iguales en la tablet, la compu y el telefono.</p>' +
-      '<p class="segnote">Necesita un token clasico con el permiso <b>gist</b> y nada mas: ' +
+      '<p class="segnote">Pega un token clasico con el permiso <b>gist</b> y nada mas: ' +
       'github.com/settings/tokens &rarr; Generate new token (classic) &rarr; marcar solo gist.</p>' +
       '<input type="text" id="tokin" placeholder="ghp_..." autocomplete="off" spellcheck="false" ' +
-      'style="width:100%;margin-bottom:8px">' +
-      '<input type="text" id="gistin" placeholder="dejalo vacio la primera vez" ' +
-      'autocomplete="off" spellcheck="false" style="width:100%;margin-bottom:10px">' +
-      '<p class="segnote" id="syncmsg">Si dejas el segundo campo vacio, se crea un gist nuevo.</p>' +
+      'style="width:100%;margin-bottom:10px">' +
+      '<p class="segnote" id="syncmsg">Eso es todo: del gist me encargo yo. ' +
+      'En los otros dispositivos, el mismo token alcanza.</p>' +
       '<button class="close" data-conectar>Conectar</button>' +
       '<button class="close" data-cancel>Cancelar</button>' +
+      '<p class="segnote" style="text-align:center;margin:12px 0 0">' +
+        '<a data-manual>cargar el id de un gist a mano</a></p>' +
     '</div>',
     function(e){
       if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+
+      if(e.target.closest('[data-manual]')){
+        if(!$('#gistin')){
+          var campo = document.createElement('input');
+          campo.type = 'text'; campo.id = 'gistin';
+          campo.placeholder = 'id del gist';
+          campo.autocomplete = 'off'; campo.spellcheck = false;
+          campo.style.cssText = 'width:100%;margin:0 0 10px';
+          $('#syncmsg').parentNode.insertBefore(campo, $('#syncmsg'));
+        }
+        $('#gistin').focus();
+        return;
+      }
+
       if(!e.target.closest('[data-conectar]')) return;
 
-      var token = $('#tokin').value.trim(), id = $('#gistin').value.trim();
+      /* Un token de GitHub es solo letras, numeros y guion bajo: sacamos
+         comillas y espacios que se cuelan al copiar. */
+      var token = $('#tokin').value.replace(/[^A-Za-z0-9_-]/g, '');
+      var id    = $('#gistin') ? $('#gistin').value.trim() : '';
       if(token.length < 20){ $('#syncmsg').textContent = 'Ese token parece incompleto.'; return; }
-      $('#syncmsg').textContent = 'Conectando...';
 
-      var listo = function(gid){
-        setGist({token:token, id:gid, ultima:Date.now()});
-        closeModal();
-        contarSync();
-        avisar('Listo', 'Sincronizacion conectada. En los otros dispositivos entra al mismo ' +
-                        'gist con el mismo token, o usa el enlace que copia este cuadro.');
-      };
+      var decir = function(t){ if($('#syncmsg')) $('#syncmsg').textContent = t; };
+      decir(id ? 'Conectando...' : 'Buscando si ya tenes uno...');
 
-      if(id){
-        var g2 = {token:token, id:id};
-        pedirGist(g2).then(function(remoto){
-          aplicar(fusionar(paquete(), remoto));
-          return subirGist(g2, paquete());
-        }).then(function(){ listo(id); })
-          .catch(function(err){
-            /* Casi siempre el 404 es que en ese campo se escribio otra cosa. */
-            $('#syncmsg').textContent = err.status === 404
-              ? 'No hay ningun gist con ese id. Si es la primera vez, vacia el campo y lo creo yo.'
-              : 'No anduvo: ' + errorSync(err) + '.';
-          });
-      } else {
-        crearGist(token, paquete())
-          .then(function(d){ listo(d.id); })
-          .catch(function(err){ $('#syncmsg').textContent = 'No anduvo: ' + errorSync(err) + '.'; });
-      }
+      (id ? Promise.resolve(id) : buscarGist(token))
+        .then(function(gid){
+          if(!gid){
+            decir('Creando el gist...');
+            return crearGist(token, paquete()).then(function(d){ return d.id; });
+          }
+          decir('Uniendo con lo que ya habia...');
+          var g2 = {token:token, id:gid};
+          return pedirGist(g2)
+            .then(function(remoto){
+              aplicar(fusionar(paquete(), remoto));
+              return subirGist(g2, paquete());
+            })
+            .then(function(){ return gid; });
+        })
+        .then(function(gid){
+          setGist({token:token, id:gid, ultima:Date.now()});
+          closeModal();
+          contarSync();
+          avisar('Listo', 'Sincronizacion conectada. En los otros dispositivos pega el ' +
+                          'mismo token en este mismo cuadro, o usa el enlace que copia.');
+        })
+        .catch(function(err){
+          decir(err.status === 404
+            ? 'No hay ningun gist con ese id.'
+            : 'No anduvo: ' + errorSync(err) + '.');
+        });
     });
 
   $('#tokin').focus();
