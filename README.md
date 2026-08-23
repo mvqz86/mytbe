@@ -24,6 +24,27 @@ Lo que disparas queda anotado tres dias en la pestana **Recientes**, con su
 miniatura y su hora. Es para volver a algo que pusiste ayer y no llegaste a
 guardar, sin gastar otra busqueda. De un vivo se anota el canal, no el video.
 
+## Perfiles
+
+Dos personas en un mismo aparato, cada una con sus carpetas y sus recientes.
+Se maneja desde **perfil**, arriba a la derecha.
+
+No es un login: no hay servidor que valide nada. Es **cifrado real**. Un
+perfil con contrasena guarda su JSON cifrado con AES-GCM y una llave derivada
+con PBKDF2 (150.000 vueltas); sin la contrasena, en el navegador solo se ve
+ruido. La llave vive en memoria mientras el perfil esta abierto y no se guarda
+en ningun lado, asi que cerrar y volver la pide de nuevo.
+
+Si se olvida la contrasena, esos datos no los recupera nadie.
+
+Un perfil tambien puede no tener contrasena: se guarda en claro y entra
+directo. Mientras haya un solo perfil sin contrasena, la app abre como
+siempre y no pregunta nada.
+
+La clave de la API es del aparato y la comparten los dos perfiles. El token de
+sincronizacion, en cambio, vive adentro del perfil: si el perfil esta cifrado,
+el token tambien.
+
 ## Sincronizacion entre dispositivos
 
 Las carpetas y los recientes se pueden compartir entre la tablet, la compu y

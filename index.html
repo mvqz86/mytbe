@@ -250,6 +250,15 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .pagefoot #syncestado.mal{color:var(--red-text)}
 .loading{text-align:center;padding:44px;color:var(--ink-3);font-size:12px}
 
+/* ---- candado ----
+   Opaco, no translucido: mientras no se abrio un perfil no hay nada atras
+   que valga la pena dejar entrever. */
+.candado{position:fixed;inset:0;z-index:60;background:var(--page);
+  display:flex;align-items:center;justify-content:center;padding:16px}
+.candado[hidden]{display:none}
+.cbox{width:100%;max-width:340px}
+.cbox .pick{margin-bottom:8px}
+
 /* ---- modal ---- */
 .modal{position:fixed;inset:0;z-index:50;background:var(--veil);
   display:flex;align-items:center;justify-content:center;padding:16px}
@@ -294,7 +303,7 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
     <div class="logo"><span class="a">my</span><span class="b">tbe</span></div>
     <div class="topright">
       <span id="quota">0/100 hoy</span><br>
-      <a id="themelink">modo oscuro</a><a id="keylink">clave</a>
+      <a id="themelink">modo oscuro</a><a id="keylink">clave</a><a id="perfillink">perfil</a>
     </div>
   </div>
 
@@ -326,6 +335,11 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 
 <div class="modal" id="modal" hidden><div class="box" id="box"></div></div>
 
+<!-- Tapa todo hasta que alguien abre su perfil. No se puede cerrar. -->
+<div class="candado" id="candado" hidden>
+  <div class="cbox" id="cbox"></div>
+</div>
+
 <script>
 /* ============ almacenamiento ============ */
 var LS = 'mytbe.v1';
@@ -355,27 +369,31 @@ function defaults(){
     vaciadoEn: 0
   };
 }
-var db;
-try { db = JSON.parse(localStorage.getItem(LS)) || defaults(); }
-catch(e){ db = defaults(); }
-if(!db || !db.folders || !db.folders.length) db = defaults();
-if(!db.quota) db.quota = {date:'', count:0};
-if(!db.reproducidos) db.reproducidos = [];
-if(!db.borrados) db.borrados = {};
-if(!db.vaciadoEn) db.vaciadoEn = 0;
+/* Los datos ya no se leen al arrancar: llegan cuando se abre un perfil, que
+   puede estar cifrado. Hasta entonces db es un molde vacio. */
+var db = defaults(), current = '';
 
-/* Una marca de borrado vieja ya no le gana a nada: se puede tirar. */
-(function podarBorrados(){
-  var limite = Date.now() - 60 * 24 * 60 * 60 * 1000, toco = false;
-  for(var k in db.borrados) if(db.borrados[k] < limite){ delete db.borrados[k]; toco = true; }
-  if(toco) localStorage.setItem(LS, JSON.stringify(db));
-})();
+function normalizar(d){
+  if(!d || !d.folders || !d.folders.length) d = defaults();
+  if(!d.quota)        d.quota = {date:'', count:0};
+  if(!d.reproducidos) d.reproducidos = [];
+  if(!d.borrados)     d.borrados = {};
+  if(!d.vaciadoEn)    d.vaciadoEn = 0;
+  if(!d.gist)         d.gist = {};
+  /* Una marca de borrado vieja ya no le gana a nada: se puede tirar. */
+  var limite = Date.now() - 60 * 24 * 60 * 60 * 1000;
+  for(var k in d.borrados) if(d.borrados[k] < limite) delete d.borrados[k];
+  return d;
+}
+
 function save(){
-  localStorage.setItem(LS, JSON.stringify(db));
+  guardarDatos();
   /* Mientras aplicamos lo que vino de afuera no hay nada nuevo que subir. */
   if(!aplicandoRemoto) programarSync();
 }
 
+/* La clave de la API es del aparato, no de la persona: los dos perfiles
+   buscan con la misma y comparten la cuota. */
 function getKey(){ return localStorage.getItem('mytbe.key') || ''; }
 function setKey(k){ localStorage.setItem('mytbe.key', k.trim()); }
 function claveValida(k){ return k.indexOf('AIza') === 0 && k.length >= 20; }
@@ -394,8 +412,9 @@ function claveDelEnlace(){
   var mg = /[#&]g=([^&]*)/.exec(location.hash || '');
   if(mg){
     var partes = decodeURIComponent(mg[1]).split(':');
+    /* Todavia no hay perfil abierto donde guardarlo: espera en la puerta. */
     if(partes.length === 2 && partes[0] && partes[1])
-      localStorage.setItem('mytbe.gist', JSON.stringify({token:partes[0], id:partes[1], ultima:0}));
+      gistPendiente = {token:partes[0], id:partes[1], ultima:0};
   }
 
   if(history.replaceState) history.replaceState(null, '', location.pathname + location.search);
@@ -1265,14 +1284,17 @@ $('#file').onchange = function(e){
    trae su addedAt y cada borrado deja una marca con su hora, asi que
    guardar en el celular y borrar en la tablet conviven sin pisarse. */
 
-var GS = 'mytbe.gist';
 var aplicandoRemoto = false, sincronizando = false, tareaSync = null;
 
-function getGist(){
-  try { return JSON.parse(localStorage.getItem(GS)) || {}; }
-  catch(e){ return {}; }
+/* Adentro del perfil, no en una clave suelta: asi el token queda cifrado
+   junto con todo lo demas y el otro usuario no lo encuentra mirando. */
+function getGist(){ return db.gist || {}; }
+function setGist(g, callado){
+  db.gist = g;
+  /* Al anotar la hora del ultimo sincronizado no hay que volver a programar
+     otro, o queda dando vueltas para siempre. */
+  callado ? guardarDatos() : save();
 }
-function setGist(g){ localStorage.setItem(GS, JSON.stringify(g)); }
 function haySync(){ var g = getGist(); return !!(g.token && g.id); }
 
 /* ---- lo que viaja ---- */
@@ -1510,7 +1532,7 @@ function sincronizar(manual){
     })
     .then(function(){
       g.ultima = Date.now();
-      setGist(g);
+      setGist(g, true);
       sincronizando = false;
       contarSync();
     })
@@ -1553,7 +1575,7 @@ function askSync(){
           confirmar('Desconectar',
             'Este dispositivo deja de sincronizar. Lo que ya esta guardado no se toca, ' +
             'y el gist queda en tu cuenta de GitHub.', 'Desconectar',
-            function(){ localStorage.removeItem(GS); contarSync(); });
+            function(){ db.gist = {}; save(); contarSync(); });
           return;
         }
         if(e.target.closest('[data-cancel]')) closeModal();
@@ -1648,6 +1670,344 @@ function enlaceCompleto(){
   } else decir('Este navegador no deja copiar solo.');
 }
 
+
+/* ============ perfiles ============
+   Dos personas, un aparato. No hay servidor que valide nada, asi que esto no
+   es un login: es cifrado de verdad. Cada perfil guarda su JSON cifrado con
+   AES-GCM y una llave derivada de su contrasena con PBKDF2. Sin la
+   contrasena, en el navegador solo se ve ruido; ni siquiera se puede
+   verificar si acerto, porque el propio descifrado es el que falla.
+
+   Un perfil tambien puede no tener contrasena: entonces se guarda en claro y
+   entra directo. Es lo que pasa con el perfil que ya existia, para que la
+   actualizacion no le pida nada a nadie. */
+
+var PERF = 'mytbe.perfiles', ACTUAL = 'mytbe.actual', DATOS = 'mytbe.datos.';
+var perfiles = [], perfilActual = null, llaveActual = null, gistPendiente = null;
+
+function leerPerfiles(){
+  try { return JSON.parse(localStorage.getItem(PERF)) || []; }
+  catch(e){ return []; }
+}
+function guardarPerfiles(){ localStorage.setItem(PERF, JSON.stringify(perfiles)); }
+function perfilPorId(id){
+  for(var i = 0; i < perfiles.length; i++) if(perfiles[i].id === id) return perfiles[i];
+  return null;
+}
+
+/* ---- cifrado ---- */
+function aTexto(buf){
+  var b = new Uint8Array(buf), s = '';
+  for(var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return btoa(s);
+}
+function aBytes(t){
+  var s = atob(t), b = new Uint8Array(s.length);
+  for(var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+  return b;
+}
+function salNueva(){ return aTexto(crypto.getRandomValues(new Uint8Array(16))); }
+
+function derivar(clave, sal){
+  return crypto.subtle
+    .importKey('raw', new TextEncoder().encode(clave), 'PBKDF2', false, ['deriveKey'])
+    .then(function(base){
+      return crypto.subtle.deriveKey(
+        {name:'PBKDF2', salt:aBytes(sal), iterations:150000, hash:'SHA-256'},
+        base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+    });
+}
+
+function cifrar(llave, texto){
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  return crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, llave,
+                               new TextEncoder().encode(texto))
+    .then(function(ct){
+      var todo = new Uint8Array(iv.length + ct.byteLength);
+      todo.set(iv, 0);
+      todo.set(new Uint8Array(ct), iv.length);
+      return aTexto(todo);
+    });
+}
+
+function descifrar(llave, blob){
+  var todo = aBytes(blob);
+  return crypto.subtle.decrypt({name:'AES-GCM', iv:todo.slice(0, 12)}, llave, todo.slice(12))
+    .then(function(pt){ return new TextDecoder().decode(pt); });
+}
+
+/* ---- guardar y cargar ---- */
+/* En cola: cifrar tarda, y dos guardados encimados podrian escribirse al
+   reves y dejar el ultimo cambio afuera. */
+var cola = Promise.resolve();
+
+function guardarDatos(){
+  if(!perfilActual) return cola;
+  var texto = JSON.stringify(db), perfil = perfilActual, llave = llaveActual;
+  cola = cola.then(function(){
+    if(!perfil.sal){ localStorage.setItem(DATOS + perfil.id, texto); return; }
+    return cifrar(llave, texto).then(function(blob){
+      localStorage.setItem(DATOS + perfil.id, blob);
+    });
+  }).catch(function(){});
+  return cola;
+}
+
+function cargarDatos(perfil, llave){
+  var crudo = localStorage.getItem(DATOS + perfil.id);
+  if(!crudo) return Promise.resolve(defaults());
+  if(!perfil.sal){
+    try { return Promise.resolve(JSON.parse(crudo)); }
+    catch(e){ return Promise.resolve(defaults()); }
+  }
+  return descifrar(llave, crudo).then(function(t){ return JSON.parse(t); });
+}
+
+/* ---- arranque ---- */
+function arrancar(){
+  perfiles = leerPerfiles();
+  if(!perfiles.length) migrarAPerfiles();
+
+  var p = perfilPorId(localStorage.getItem(ACTUAL)) || perfiles[0];
+
+  /* Con un solo perfil sin contrasena no hay a quien preguntarle nada: la app
+     abre igual que siempre. El candado aparece recien cuando hace falta. */
+  if(perfiles.length === 1 && !p.sal){ entrar(p, null); return; }
+  pedirPerfil();
+}
+
+/* Lo que ya estaba guardado pasa a ser el primer perfil, sin contrasena y sin
+   molestar a nadie. */
+function migrarAPerfiles(){
+  var p = {id:'p1', nombre:'Yo', sal:null};
+  var viejo = localStorage.getItem(LS);
+  var g = null;
+  try { g = JSON.parse(localStorage.getItem('mytbe.gist')); } catch(e){}
+
+  var d = defaults();
+  if(viejo){ try { d = JSON.parse(viejo); } catch(e){} }
+  if(g && g.token) d.gist = g;
+
+  localStorage.setItem(DATOS + p.id, JSON.stringify(d));
+  localStorage.removeItem(LS);
+  localStorage.removeItem('mytbe.gist');
+  perfiles = [p];
+  guardarPerfiles();
+  localStorage.setItem(ACTUAL, p.id);
+}
+
+function entrar(perfil, llave){
+  return cargarDatos(perfil, llave).then(function(d){
+    perfilActual = perfil;
+    llaveActual = llave;
+    db = normalizar(d);
+    if(gistPendiente){ db.gist = gistPendiente; gistPendiente = null; guardarDatos(); }
+    current = db.folders[0].id;
+    results = null;
+    modoOrden = false;
+    localStorage.setItem(ACTUAL, perfil.id);
+    $('#candado').hidden = true;
+    $('#perfillink').textContent = perfiles.length > 1 ? perfil.nombre : 'perfil';
+    contarSync();
+    renderQuota();
+    render();
+    if(haySync()) setTimeout(function(){ sincronizar(); }, 800);
+  });
+}
+
+/* Cerrar deja la llave afuera: no queda guardada en ningun lado, asi que
+   volver a entrar pide la contrasena de nuevo. */
+function salir(){
+  llaveActual = null;
+  perfilActual = null;
+  db = defaults();
+  clearTimeout(tareaSync);
+  pedirPerfil();
+}
+
+/* ---- la pantalla del candado ---- */
+function pedirPerfil(){
+  $('#candado').hidden = false;
+  $('#cbox').innerHTML =
+    '<div class="box"><h3>Quien sos</h3><div class="body">' +
+      perfiles.map(function(p){
+        return '<button class="pick" data-perfil="' + esc(p.id) + '">' + esc(p.nombre) +
+               '<small>' + (p.sal ? 'con contrasena' : 'sin contrasena') + '</small></button>';
+      }).join('') +
+    '</div></div>';
+}
+
+var perfilPidiendo = null;
+
+function pedirClave(perfil){
+  perfilPidiendo = perfil;
+  $('#cbox').innerHTML =
+    '<div class="box"><h3>' + esc(perfil.nombre) + '</h3><div class="body">' +
+      '<p>Tu contrasena para abrir este perfil.</p>' +
+      '<input type="password" id="clavein" autocomplete="off" style="width:100%;margin-bottom:10px">' +
+      '<p class="segnote" id="cmsg">Si no es la correcta, no hay forma de leer estos datos.</p>' +
+      '<button class="close" data-entrar>Entrar</button>' +
+      '<button class="close" data-volver>Volver</button>' +
+    '</div></div>';
+  $('#clavein').focus();
+  $('#clavein').onkeydown = function(e){ if(e.key === 'Enter') abrirCon(perfil); };
+}
+
+function abrirCon(perfil){
+  var clave = $('#clavein').value;
+  if(!clave){ $('#clavein').focus(); return; }
+  $('#cmsg').textContent = 'Abriendo...';
+  derivar(clave, perfil.sal)
+    .then(function(llave){ return entrar(perfil, llave); })
+    .catch(function(){
+      $('#cmsg').textContent = 'Esa contrasena no es.';
+      $('#clavein').value = '';
+      $('#clavein').focus();
+    });
+}
+
+$('#candado').addEventListener('click', function(e){
+  var a;
+  if((a = e.target.closest('[data-perfil]'))){
+    var p = perfilPorId(a.dataset.perfil);
+    p.sal ? pedirClave(p) : entrar(p, null);
+    return;
+  }
+  if(e.target.closest('[data-entrar]')){ abrirCon(perfilPidiendo); return; }
+  if(e.target.closest('[data-volver]')) pedirPerfil();
+});
+
+/* ---- administrar ---- */
+function askPerfil(){
+  var p = perfilActual;
+  openModal(
+    '<h3>Perfil</h3><div class="body">' +
+      '<p>Estas en <b>' + esc(p.nombre) + '</b>' +
+      (p.sal ? ', con contrasena.' : ', sin contrasena: cualquiera que agarre el aparato lo abre.') + '</p>' +
+      (perfiles.length < 2
+        ? '<button class="close" data-nuevo>Agregar el segundo perfil</button>'
+        : '<button class="close" data-cambiar>Cambiar de perfil</button>') +
+      '<button class="close" data-clave>' + (p.sal ? 'Cambiar la contrasena' : 'Poner una contrasena') + '</button>' +
+      (p.sal ? '<button class="close" data-sinclave>Sacar la contrasena</button>' : '') +
+      (perfiles.length > 1 ? '<button class="close peligro" data-borrar>Borrar este perfil</button>' : '') +
+      '<button class="close" data-cancel>Cerrar</button>' +
+    '</div>',
+    function(e){
+      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+      if(e.target.closest('[data-cambiar]')){ closeModal(); salir(); return; }
+      if(e.target.closest('[data-nuevo]')){ closeModal(); askNuevoPerfil(); return; }
+      if(e.target.closest('[data-clave]')){ closeModal(); askClavePerfil(); return; }
+
+      if(e.target.closest('[data-sinclave]')){
+        closeModal();
+        confirmar('Sacar la contrasena',
+          'Los datos de <b>' + esc(p.nombre) + '</b> pasan a guardarse sin cifrar, y el perfil ' +
+          'se abre sin preguntar nada.', 'Sacar',
+          function(){
+            localStorage.removeItem(DATOS + p.id);
+            p.sal = null; llaveActual = null;
+            guardarPerfiles(); guardarDatos();
+            avisar('Listo', 'Ese perfil ya no pide contrasena.');
+          });
+        return;
+      }
+
+      if(e.target.closest('[data-borrar]')){
+        closeModal();
+        confirmar('Borrar perfil',
+          'Se borra <b>' + esc(p.nombre) + '</b> con todas sus carpetas de este aparato. ' +
+          'No se puede deshacer.', 'Borrar',
+          function(){
+            localStorage.removeItem(DATOS + p.id);
+            perfiles = perfiles.filter(function(x){ return x.id !== p.id; });
+            guardarPerfiles();
+            salir();
+          });
+      }
+    });
+}
+
+function askNuevoPerfil(){
+  openModal(
+    '<h3>Segundo perfil</h3><div class="body">' +
+      '<p>Sus carpetas y sus recientes, aparte de los tuyos. Vive solo en este aparato.</p>' +
+      '<input type="text" id="np" placeholder="Nombre" maxlength="20" autocomplete="off" ' +
+      'style="width:100%;margin-bottom:8px">' +
+      '<input type="password" id="nc" placeholder="Contrasena (puede ser un numero)" ' +
+      'autocomplete="new-password" style="width:100%;margin-bottom:10px">' +
+      '<p class="segnote" id="npmsg">Sin contrasena, sus carpetas quedan a la vista de cualquiera. ' +
+      'Con contrasena no hay forma de recuperarlas si se olvida.</p>' +
+      '<button class="close" data-crear>Crear</button>' +
+      '<button class="close" data-cancel>Cancelar</button>' +
+    '</div>',
+    function(e){
+      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+      if(!e.target.closest('[data-crear]')) return;
+
+      var nombre = $('#np').value.trim(), clave = $('#nc').value;
+      if(!nombre){ $('#npmsg').textContent = 'Falta el nombre.'; $('#np').focus(); return; }
+
+      var nuevo = {id:'p' + Date.now(), nombre:nombre, sal:clave ? salNueva() : null};
+      var datos = JSON.stringify(defaults());
+
+      var listo = function(){
+        perfiles.push(nuevo);
+        guardarPerfiles();
+        closeModal();
+        $('#perfillink').textContent = perfilActual.nombre;
+        avisar('Listo', 'Ya existe <b>' + esc(nombre) + '</b>. Para entrar: <b>perfil</b> ' +
+                        'y despues <b>cambiar de perfil</b>.');
+      };
+
+      if(!clave){ localStorage.setItem(DATOS + nuevo.id, datos); listo(); return; }
+      $('#npmsg').textContent = 'Creando...';
+      derivar(clave, nuevo.sal)
+        .then(function(k){ return cifrar(k, datos); })
+        .then(function(blob){ localStorage.setItem(DATOS + nuevo.id, blob); listo(); })
+        .catch(function(){ $('#npmsg').textContent = 'No se pudo crear.'; });
+    });
+
+  $('#np').focus();
+}
+
+function askClavePerfil(){
+  var p = perfilActual;
+  openModal(
+    '<h3>Contrasena</h3><div class="body">' +
+      '<p>De aca en mas, <b>' + esc(p.nombre) + '</b> se guarda cifrado y pide esto para abrir.</p>' +
+      '<input type="password" id="c1" placeholder="Contrasena nueva" autocomplete="new-password" ' +
+      'style="width:100%;margin-bottom:8px">' +
+      '<input type="password" id="c2" placeholder="Otra vez" autocomplete="new-password" ' +
+      'style="width:100%;margin-bottom:10px">' +
+      '<p class="segnote" id="cpmsg">Si se olvida, esos datos no los recupera nadie. ' +
+      'Ni yo, ni vos, ni GitHub.</p>' +
+      '<button class="close" data-poner>Guardar</button>' +
+      '<button class="close" data-cancel>Cancelar</button>' +
+    '</div>',
+    function(e){
+      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+      if(!e.target.closest('[data-poner]')) return;
+
+      var a = $('#c1').value, b = $('#c2').value;
+      if(!a){ $('#cpmsg').textContent = 'Escribi una contrasena.'; return; }
+      if(a !== b){ $('#cpmsg').textContent = 'Las dos no coinciden.'; $('#c2').value = ''; $('#c2').focus(); return; }
+
+      $('#cpmsg').textContent = 'Cifrando...';
+      var sal = salNueva();
+      derivar(a, sal).then(function(k){
+        p.sal = sal;
+        llaveActual = k;
+        guardarPerfiles();
+        return guardarDatos();
+      }).then(function(){
+        closeModal();
+        avisar('Listo', 'Desde ahora ese perfil pide contrasena.');
+      }).catch(function(){ $('#cpmsg').textContent = 'No se pudo guardar.'; });
+    });
+
+  $('#c1').focus();
+}
+
 /* ============ instalable ============
    Sin service worker, Android la agrega como acceso directo con barra de
    navegador en vez de app con icono propio. */
@@ -1666,14 +2026,14 @@ $('#tabs').addEventListener('scroll', sombrasTabs);
 window.addEventListener('resize', sombrasTabs);
 
 $('#sync').onclick = askSync;
+$('#perfillink').onclick = askPerfil;
 
 aplicarTema();
 estadoRed();
-contarSync();
-/* Al abrir, traemos lo que hayan hecho los otros dispositivos. */
-if(haySync()) setTimeout(function(){ sincronizar(); }, 800);
-renderQuota();
-render();
+
+/* Lo ultimo: pintar depende de que haya un perfil abierto, y abrirlo puede
+   necesitar una contrasena. Lo que sigue lo hace entrar(). */
+arrancar();
 </script>
 </body>
 </html>
