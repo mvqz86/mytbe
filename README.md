@@ -49,10 +49,13 @@ cuota: es una direccion.
   solapas y hasta lo que quedo en Recientes, y el filtro sigue andando
   mientras marcas: buscas, marcas, borras el filtro, buscas otra cosa y marcas
   de nuevo.
+- El boton de cada grupo pasa a ser **+ todo**: agrega los de esa carpeta de
+  una, y si ya estaban todos los saca. Veinte temas en un toque.
 - Arriba aparece una barra con lo que llevas elegido y dos botones:
   **reproducir**, que lo manda entero a YouTube, y **guardar**, que lo deja
   como un item con nombre propio en la solapa o carpeta que elijas. Despues se
-  toca y suena todo seguido.
+  toca y suena todo seguido. Cualquiera de los dos termina el armado: el modo
+  se apaga solo.
 
 Las radios quedan afuera: son canales y no tienen un id de video estable. El
 tope es de unos 50 por lista; si hay mas, van los primeros 50 y se avisa. La

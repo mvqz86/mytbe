@@ -260,6 +260,7 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .grupo .n{margin-left:auto;font-weight:normal;letter-spacing:0;color:var(--ink-3);flex:none}
 .grupo .masg{margin-left:9px;flex:none;width:26px;height:24px;padding:0;border-radius:3px;
   font:bold 14px Arial,Helvetica,sans-serif;color:var(--btn-ink)}
+.grupo .masg.ancho{width:auto;padding:0 8px;font-size:11px;letter-spacing:.04em}
 .grupo.plegado{color:var(--ink-3)}
 
 /* Mas densa que la vista de carpetas: en una lista larga, la densidad es lo
@@ -916,6 +917,27 @@ function videosVisibles(f){
   return salida.concat(f.items.filter(sirve));
 }
 
+/* Los videos de ese grupo tal como se estan viendo: si hay filtro puesto,
+   solo los que pasaron el filtro. */
+function videosDeGrupo(id){
+  var c = carpetaPorId(id);
+  if(!c) return [];
+  var buscado = pelar(filtro.trim());
+  return c.items.filter(function(it){
+    if(it.kind !== 'video') return false;
+    if(!buscado) return true;
+    return pelar(it.title).indexOf(buscado) > -1 || pelar(it.channel || '').indexOf(buscado) > -1;
+  });
+}
+
+/* Terminar el armado: se apaga solo despues de usar la lista, que es cuando
+   uno ya termino. */
+function salirDeLista(){
+  modoElegir = false;
+  elegidos = [];
+  render();
+}
+
 function reproducirLista(items, nombre){
   if(!items.length) return;
   if(items.length > TOPE_LISTA){
@@ -1041,6 +1063,11 @@ function renderFolder(){
 
   var grupos = 0, mostrados = 0;
 
+  function botonNueva(c){
+    return '<button class="masg" data-dentro2="' + esc(c.id) + '" title="' +
+      esc(tipoHijaDe(c.id)) + ' nueva adentro de ' + esc(c.name) + '">+</button>';
+  }
+
   function grupo(nombres, carpeta, propio){
     /* Ordenando trabajamos sobre la lista entera, sin filtrar: si no, las
        flechas moverian el vecino equivocado. */
@@ -1057,11 +1084,21 @@ function renderFolder(){
       '<span class="n">' + items.length + '</span>' +
       /* Crear un nivel mas abajo sin salir de aca. En el grupo de los sueltos
          no va: ese no es una carpeta, es el resto. */
-      (items.filter(function(i){ return i.kind === 'video'; }).length
-        ? '<button class="masg" data-play2="' + esc(carpeta.id) + '" title="Reproducir ' +
-          esc(carpeta.name) + ' entera">&#9654;</button>' : '') +
-      (propio ? '' : '<button class="masg" data-dentro2="' + esc(carpeta.id) + '" title="' +
-        esc(tipoHijaDe(carpeta.id)) + ' nueva adentro de ' + esc(carpeta.name) + '">+</button>') +
+      (function(){
+        var suyos = items.filter(function(i){ return i.kind === 'video'; });
+        if(!suyos.length) return propio ? '' : botonNueva(carpeta);
+        if(modoElegir){
+          /* Armando una lista, el boton del grupo agrega o saca los suyos de
+             una: veinte temas en un toque en vez de veinte. */
+          var todos = suyos.every(function(i){ return posicionElegido(i.ytId) > -1; });
+          return '<button class="masg ancho" data-todos="' + esc(carpeta.id) + '" title="' +
+            (todos ? 'Sacar' : 'Agregar') + ' todo ' + esc(carpeta.name) + '">' +
+            (todos ? '&#10003;' : '+') + ' todo</button>';
+        }
+        return '<button class="masg" data-play2="' + esc(carpeta.id) + '" title="Reproducir ' +
+          esc(carpeta.name) + ' entera">&#9654;</button>' +
+          (propio ? '' : botonNueva(carpeta));
+      })() +
     '</div>';
 
     if(!plegado) html += filas(carpeta, items);
@@ -1386,6 +1423,8 @@ function askGuardar(base){
       });
       save();
       closeModal();
+      /* Guardarla es el final del armado. */
+      if(modoElegir){ modoElegir = false; elegidos = []; }
       render();
       return;
     }
@@ -1710,6 +1749,17 @@ $('#panel').addEventListener('click', function(e){
 
   /* Ordenar y traer mas van antes del disparo: viven dentro de la fila y
      closest() las taparia. */
+  if((a = e.target.closest('[data-todos]'))){
+    var suyos = videosDeGrupo(a.dataset.todos);
+    var puestos = suyos.every(function(i){ return posicionElegido(i.ytId) > -1; });
+    suyos.forEach(function(it){
+      var donde = posicionElegido(it.ytId);
+      if(puestos){ if(donde > -1) elegidos.splice(donde, 1); }
+      else if(donde < 0) elegidos.push({ytId:it.ytId, title:it.title, thumb:it.thumb || ''});
+    });
+    render();
+    return;
+  }
   if((a = e.target.closest('[data-play2]'))){
     var cg = carpetaPorId(a.dataset.play2);
     reproducirLista(cg.items.filter(function(i){ return i.kind === 'video'; }), cg.name);
@@ -1731,18 +1781,6 @@ $('#panel').addEventListener('click', function(e){
       if(cual) elegidos.push({ytId:cual.ytId, title:cual.title, thumb:cual.thumb || ''});
     }
     render();
-    return;
-  }
-  if(e.target.closest('[data-comolista]')){
-    var fl = carpetaPorId(current);
-    var vs = videosVisibles(fl).slice(0, TOPE_LISTA);
-    askGuardar({
-      lista: true,
-      ytIds: vs.map(function(i){ return i.ytId; }),
-      title: fl.name + (filtro.trim() ? ' ' + filtro.trim() : ''),
-      channel: '',
-      thumb: vs[0] ? vs[0].thumb : ''
-    });
     return;
   }
   if((a = e.target.closest('[data-dentro2]'))){ askNewFolder(a.dataset.dentro2); return; }
@@ -2666,11 +2704,15 @@ function barraLista(){
         '<button data-playelegidos>&#9654; reproducir</button>' +
         '<button data-listaelegidos>guardar</button>' +
       '</span>'
-    : 'Toca los que quieras agregar, de donde sea';
+    : 'Toca los que quieras, o <b>+ todo</b> para un grupo entero';
 }
 
 $('#barralista').addEventListener('click', function(e){
-  if(e.target.closest('[data-playelegidos]')){ reproducirLista(elegidos, 'Playlist'); return; }
+  if(e.target.closest('[data-playelegidos]')){
+    reproducirLista(elegidos, 'Playlist');
+    salirDeLista();
+    return;
+  }
   if(e.target.closest('[data-listaelegidos]')){
     askGuardar({
       lista: true,
