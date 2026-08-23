@@ -494,12 +494,28 @@ function urlFor(item){
     ? 'https://www.youtube.com/channel/' + item.ytId + '/live'
     : 'https://www.youtube.com/watch?v=' + item.ytId;
 }
+/* En Android un https lo agarra primero el navegador, y recien ahi el
+   sistema pregunta si pasar a la app de YouTube. Un intent:// va derecho a
+   la app: sin escala y sin cartel. Si la app no esta instalada, el propio
+   intent cae al sitio web, que es para lo que sirve browser_fallback_url. */
+function esAndroid(){ return /Android/i.test(navigator.userAgent); }
+
+function intentDe(url){
+  return 'intent://' + url.replace('https://', '') +
+         '#Intent;scheme=https;package=com.google.android.youtube;' +
+         'S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
+}
+
 /* A veces lo que conviene abrir y lo que conviene anotar no son lo mismo:
    de un vivo se abre el stream que tocaste, pero se anota el canal, que es
    lo que va a seguir sirviendo pasado manana. */
 function launch(item, anotar){
   anotarReproducido(anotar || item);
-  window.open(urlFor(item), '_blank', 'noopener');
+  var url = urlFor(item);
+  /* En Android no se abre pestana nueva: el sistema cambia de app y mytbe
+     queda atras tal como estaba. */
+  if(esAndroid()) location.href = intentDe(url);
+  else window.open(url, '_blank', 'noopener');
 }
 
 /* Nombre de la carpeta donde ya esta guardado ese id, o null. */
