@@ -103,6 +103,23 @@ blancos distintos, de 34 de alto para no pisarse con el pulgar:
 
 Abajo de todo, *+ solapa nueva*.
 
+### Tapas
+
+Una solapa puede verse en **tapas** en vez de renglones, con el interruptor
+chiquito de arriba a la derecha del panel. Se guarda por solapa, asi que
+Musica puede ir en tapas y Radios seguir en lista.
+
+En tapas, el arte va recortado en cuadrado, la duracion se apoya encima como
+en cualquier reproductor, y el titulo va abajo en dos lineas. Un vivo lleva
+EN VIVO en rojo y una lista, la cantidad de videos en azul. Rompe a proposito
+con el biselado del resto de la app: ahi no hay cajas plateadas ni
+degradados, hay arte y nada mas.
+
+Ordenar siempre se hace en lista: las flechas necesitan un arriba y un abajo.
+
+Ademas, cada encabezado de grupo dice cuanto dura todo junto: *Rock 3 &middot;
+2 h 9 min*.
+
 ### Como se ve una carpeta
 
 Hay una sola vista y es la lista. Todo lo que cuelga de la carpeta aparece de
