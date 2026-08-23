@@ -239,36 +239,56 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 
 /* ---- lista guardada: compacta, para ver muchas de un vistazo ----
    Sigue midiendo mas de 50px de alto, que es lo minimo para tocar sin mirar. */
-.row.compact{padding:6px 4px;align-items:center;gap:9px}
-.row.compact .th{width:54px;height:40px}
-.th.icono{display:flex;align-items:center;justify-content:center;font-size:21px;
-  background:var(--thumb);border-color:var(--thumb-edge)}
+/* La fila compacta: la miniatura en la proporcion en que YouTube la entrega
+   (16:9) en vez de estirada a 54x40, con el tiempo apoyado encima como en
+   cualquier reproductor. Sale mas ancha, mas baja y con mas imagen: la fila
+   pasa de 52 a 48 de alto. */
+.row.compact{padding:6px;margin:0 -6px;gap:10px;align-items:center;
+  border-bottom:none;border-radius:8px}
+.row.compact + .row.compact{margin-top:1px}
+.tapa{position:relative;flex:none;line-height:0}
+.row.compact .th{width:64px;height:36px;border-radius:5px;border:1px solid var(--thumb-edge)}
+.row.compact .ttl{-webkit-line-clamp:1;margin:0 0 2px}
+.row.compact .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-size:11px;line-height:1.45}
 
+/* Lo que antes era texto en la linea de abajo. Arriba de la imagen no ocupa
+   lugar, y deja el renglon libre para el canal. */
+.chip{position:absolute;right:3px;bottom:3px;padding:1px 4px;border-radius:3px;
+  background:rgba(0,0,0,.8);color:#fff;font:bold 9.5px/1.4 Arial,Helvetica,sans-serif;
+  font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.chip.envivo{background:var(--red)}
+.chip.eslista{background:var(--sel)}
+.th.icono{display:flex;align-items:center;justify-content:center;font-size:21px;
+  background:var(--thumb);border-color:var(--thumb-edge);border-radius:5px}
 /* ---- vista lista ----
    La subcarpeta deja de ser un lugar al que se entra y pasa a ser un
    encabezado. La cabecera se queda pegada arriba mientras se scrollea, que
    es lo unico que hace legible una lista larga de grupos. */
-.grupo{display:flex;align-items:center;gap:7px;position:sticky;top:0;z-index:4;
-  margin:12px -12px 0;padding:7px 12px;cursor:pointer;
-  background:linear-gradient(var(--grupo-a),var(--grupo-b));
-  border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);
-  font:bold 10.5px Arial,Helvetica,sans-serif;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--tab-ink)}
+/* Plano y sin degradado: el biselado plateado es de las cajas y los botones,
+   y aca lo unico que hace es pesar. Fondo del panel para que siga sirviendo
+   de encabezado pegajoso. */
+.grupo{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:4;
+  margin:16px -12px 4px;padding:7px 12px 6px;cursor:pointer;
+  background:var(--panel);border-bottom:1px solid var(--edge);
+  font:bold 11px Arial,Helvetica,sans-serif;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink)}
 .grupo:first-child{margin-top:0}
 .grupo .flecha{font-size:9px;color:var(--ink-3);flex:none}
 .grupo .ruta{color:var(--ink-3);font-weight:normal}
-.grupo .n{margin-left:auto;font-weight:normal;letter-spacing:0;color:var(--ink-3);flex:none}
-.grupo .masg{margin-left:9px;flex:none;width:26px;height:24px;padding:0;border-radius:3px;
-  font:bold 14px Arial,Helvetica,sans-serif;color:var(--btn-ink)}
+.grupo .n{margin-left:auto;font-weight:normal;letter-spacing:0;color:var(--ink-3);flex:none;
+  text-transform:none;font-size:10.5px}
+.grupo .masg{margin-left:8px;flex:none;width:26px;height:24px;padding:0;border-radius:4px;
+  font:bold 14px Arial,Helvetica,sans-serif;color:var(--ink-2);
+  background:none;border:1px solid var(--edge)}
+.grupo .masg:active{background:var(--x-hit)}
 .grupo .masg.ancho{width:auto;padding:0 8px;font-size:11px;letter-spacing:.04em}
 .grupo.plegado{color:var(--ink-3)}
 
 /* Mas densa que la vista de carpetas: en una lista larga, la densidad es lo
    que hace rapido encontrar algo. */
-.row.lista{padding:7px 4px}
-.row.lista .th{width:44px;height:33px}
-.row.lista .ttl{font-size:13.5px;-webkit-line-clamp:1;white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;display:block;margin:0 0 1px}
+.row.lista .ttl{font-size:14px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;display:block}
 
 .filtro{display:flex;margin-bottom:10px}
 .filtro input{width:100%;font-size:16px}
@@ -573,6 +593,15 @@ function bumpQuota(){
   db.quota.count++; save(); renderQuota();
 }
 
+/* Lo que va apoyado sobre la miniatura: cuanto dura, o que clase de cosa es
+   cuando no dura nada. */
+function marca(it){
+  if(it.kind === 'radio')    return '<span class="chip envivo">EN VIVO</span>';
+  if(it.kind === 'playlist') return '<span class="chip eslista">&#9654; ' +
+                                    ((it.ytIds || []).length) + '</span>';
+  return it.dura ? '<span class="chip">' + esc(it.dura) + '</span>' : '';
+}
+
 /* "1,2 M" antes que "1234567": el numero exacto no le importa a nadie, el
    orden de magnitud si. */
 function vistas(n){
@@ -866,15 +895,14 @@ function renderRecientes(){
         (modoElegir && !elegible ? ' apagada' : '') + '"' +
         (elegible ? ' data-elegir="' + esc(r.ytId) + '" data-en=""' :
          modoElegir ? '' : ' data-abrir="' + i + '"') + '>' +
-        '<img class="th" src="' + esc(r.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
+        '<div class="tapa">' +
+          '<img class="th" src="' + esc(r.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
+          marca(r) +
+        '</div>' +
         '<div class="info">' +
           '<p class="ttl">' + esc(r.title || 'Sin titulo') + '</p>' +
           '<div class="sub">' + esc(hace(r.cuando)) +
-            (r.kind === 'playlist'
-              ? ' &middot; <span class="eslista">&#9654; lista</span> &middot; ' +
-                plural((r.ytIds || []).length, 'video', 'videos')
-              : (r.dura ? ' &middot; <b class="dura">' + esc(r.dura) + '</b>' : '') +
-                (r.channel ? ' &middot; ' + esc(r.channel) : '')) +
+            (r.channel ? ' &middot; ' + esc(r.channel) : '') +
             (ya ? ' &middot; <span class="saved">&#10003; en ' + esc(ya) + '</span>' : '') +
           '</div>' +
         '</div>' +
@@ -1042,16 +1070,16 @@ function renderFolder(){
            (modoOrden || modoElegir ? '' : ' data-open="' + esc(it.ytId) + '"') +
            (elegible ? ' data-elegir="' + esc(it.ytId) + '"' : '') +
            ' data-en="' + esc(duena.id) + '">' +
-      '<img class="th" src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
+      '<div class="tapa">' +
+        '<img class="th" src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
+        marca(it) +
+      '</div>' +
       '<div class="info">' +
         '<p class="ttl">' + esc(it.title) + '</p>' +
         '<div class="sub">' +
-          (it.kind === 'radio'
-            ? '<span class="live">en vivo</span>'
-            : it.kind === 'playlist'
-              ? '<span class="eslista">&#9654; lista</span> &middot; ' +
-                plural((it.ytIds || []).length, 'video', 'videos')
-              : (it.dura ? '<b class="dura">' + esc(it.dura) + '</b> &middot; ' : '') + esc(it.channel)) +
+          (it.kind === 'playlist'
+            ? plural((it.ytIds || []).length, 'video', 'videos')
+            : esc(it.channel || '')) +
         '</div>' +
       '</div>' +
       (modoOrden
