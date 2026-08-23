@@ -39,20 +39,21 @@ se veian tres y media.
 Las carpetas siguen siendo una lista plana y cada una recuerda a su madre. Eso
 mantiene simple la fusion entre dispositivos, que empareja por id.
 
-### Vista lista
+### Como se ve una carpeta
 
-Una carpeta con subcarpetas puede verse de dos formas, y se acuerda de cual
-elegiste: *vista: carpetas / lista*, en el pie del panel.
+Hay una sola vista y es la lista. Todo lo que cuelga de la carpeta aparece de
+una tirada y cada subcarpeta es un encabezado, que se queda pegado arriba
+mientras se scrollea, en vez de un lugar al que entrar y del que volver.
 
-En **lista**, todo lo que cuelga de esa carpeta aparece de una sola tirada y
-cada subcarpeta pasa a ser un encabezado, que se queda pegado arriba mientras
-se scrollea. Los grupos se pliegan de a uno con un toque y quedan asi para la
-proxima. Arriba hay un campo para filtrar por titulo o canal —sin tildes y sin
-mayusculas, "clasica" encuentra "Clásica"— que solo mira lo que ya esta
-guardado y no toca internet. Con el filtro puesto los grupos plegados se abren
-solos: si escribiste algo, lo que buscas no puede quedar escondido.
-
-Los elementos sueltos de la propia carpeta van al final, en su propio grupo.
+- Los grupos se pliegan de a uno con un toque y quedan asi para la proxima.
+- Cuando hay mas de seis elementos aparece un campo para filtrar por titulo o
+  canal, sin tildes ni mayusculas: "clasica" encuentra "Clásica". Mira solo lo
+  guardado, no toca internet.
+- Con el filtro puesto los grupos plegados se abren solos: si escribiste algo,
+  lo que buscas no puede quedar escondido.
+- Lo suelto de la propia carpeta va al final, en su propio grupo.
+- *Ordenar* mueve cada cosa dentro de su grupo, con flechas.
+- Una carpeta sin subcarpetas se ve como una lista comun, sin encabezados.
 
 ## Perfiles
 

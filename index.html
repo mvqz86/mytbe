@@ -706,115 +706,37 @@ function renderRecientes(){
   $('#panel').innerHTML = html;
 }
 
-/* ---- carpeta ---- */
-var filtro = '';    /* lo tipeado en la vista lista */
+/* ---- carpeta ----
+   Una sola forma de mirar una carpeta: la lista. Todo lo que cuelga de ella
+   aparece de una tirada y cada subcarpeta es un encabezado que se queda
+   pegado arriba, en vez de un lugar al que entrar y del que volver. */
+var filtro = '';    /* lo tipeado en el campo de filtrar */
 
 function renderFolder(){
   var f = carpetaPorId(current) || db.folders[0];
   current = f.id;
-  if(f.vista === 'lista' && hijasDe(f.id).length){ renderLista(f); return; }
-  filtro = '';
-  var html = '';
-
-  /* Donde estoy parado, y como salir. */
-  var ruta = rutaDe(f.id);
-  if(ruta.length > 1){
-    html += '<div class="crumb">' +
-      ruta.map(function(c, i){
-        return i === ruta.length - 1
-          ? '<b>' + esc(c.name) + '</b>'
-          : '<a data-sub="' + esc(c.id) + '">' + esc(c.name) + '</a>';
-      }).join(' &rsaquo; ') + '</div>';
-  }
-
-  /* Las subcarpetas van primero: son el camino, no el contenido. */
-  var hijas = hijasDe(f.id);
-  if(hijas.length){
-    html += hijas.map(function(h){
-      return '<div class="row compact" data-sub="' + esc(h.id) + '">' +
-        '<div class="th icono">&#128193;</div>' +
-        '<div class="info">' +
-          '<p class="ttl">' + esc(h.name) + '</p>' +
-          '<div class="sub">' + plural(cuentaDe(h), 'elemento', 'elementos') + '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }
-
-  if(!f.items.length && !hijas.length){
-    modoOrden = false;
-    html += '<div class="empty">Esta carpeta esta vacia.<br>' +
-            'Busca algo arriba y toca <b>+</b> en el resultado.</div>';
-  } else if(f.items.length) {
-    var ultimo = f.items.length - 1;
-    html += f.items.map(function(it, i){
-      /* Mientras se ordena la fila deja de disparar: mover una radio no puede
-         terminar en YouTube por un toque de mas. */
-      return '<div class="row compact' + (modoOrden ? ' ordenando' : '') + '"' +
-             (modoOrden ? '' : ' data-open="' + esc(it.ytId) + '"') + '>' +
-        '<img class="th" src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
-        '<div class="info">' +
-          '<p class="ttl">' + esc(it.title) + '</p>' +
-          '<div class="sub">' +
-            (it.kind === 'radio' ? '<span class="live">en vivo</span>' : esc(it.channel)) +
-          '</div>' +
-        '</div>' +
-        (modoOrden
-          ? '<div class="ord">' +
-              '<button data-up="' + i + '" title="Subir"' + (i === 0 ? ' disabled' : '') + '>&#9650;</button>' +
-              '<button data-down="' + i + '" title="Bajar"' + (i === ultimo ? ' disabled' : '') + '>&#9660;</button>' +
-            '</div>'
-          : '<button class="x" data-rm="' + esc(it.ytId) + '" title="Eliminar">&times;</button>') +
-      '</div>';
-    }).join('');
-  }
-
-  html += '<div class="foot">';
-  if(modoOrden){
-    html += 'Move cada uno con las flechas &middot; <a data-orden>listo</a>';
-  } else {
-    html += plural(f.items.length, 'elemento', 'elementos') + ' aca';
-    if(hijas.length) html += ' y ' + plural(cuentaDe(f) - f.items.length, 'elemento', 'elementos') + ' adentro';
-    html += ' &middot; <a data-nuevasub>subcarpeta nueva</a>';
-    /* Ofrecer la lista solo donde sirve: una carpeta sin hijas no tiene nada
-       que agrupar. */
-    if(hijas.length) html += ' &middot; vista: <a data-vista="lista">lista</a>';
-    if(f.items.length > 1)    html += ' &middot; <a data-orden>ordenar</a>';
-    if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar carpeta</a>';
-  }
-  html += '</div>';
-
-  $('#panel').innerHTML = html;
-}
-
-/* ---- vista lista ----
-   Todo lo que cuelga de la carpeta en una sola tirada, cada subcarpeta como
-   grupo. Los elementos sueltos de la propia carpeta van al final, para que no
-   queden sepultados entre los grupos. */
-function renderLista(f){
   if(!f.plegados) f.plegados = {};
+
   var buscado = pelar(filtro.trim()), filtrando = !!buscado;
-
+  var hijas = hijasDe(f.id), total = cuentaDe(f);
   var html = '';
-  var ruta = rutaDe(f.id);
-  if(ruta.length > 1){
-    html += '<div class="crumb">' +
-      ruta.map(function(c, i){
-        return i === ruta.length - 1 ? '<b>' + esc(c.name) + '</b>'
-                                     : '<a data-sub="' + esc(c.id) + '">' + esc(c.name) + '</a>';
-      }).join(' &rsaquo; ') + '</div>';
-  }
 
-  html += '<div class="filtro"><input type="text" id="filtro" placeholder="filtrar en ' +
-          esc(f.name) + '" autocomplete="off" spellcheck="false" value="' + esc(filtro) + '"></div>';
+  /* El filtro aparece cuando hay algo que filtrar. En una carpeta de dos
+     cosas seria un campo de mas. */
+  if(total > 6 && !modoOrden){
+    html += '<div class="filtro"><input type="text" id="filtro" placeholder="filtrar en ' +
+            esc(f.name) + '" autocomplete="off" spellcheck="false" value="' + esc(filtro) + '"></div>';
+  }
 
   function coincide(it){
     if(!filtrando) return true;
     return pelar(it.title).indexOf(buscado) > -1 || pelar(it.channel || '').indexOf(buscado) > -1;
   }
 
-  function fila(it, duena){
-    return '<div class="row compact lista" data-open="' + esc(it.ytId) + '" data-en="' + esc(duena.id) + '">' +
+  function fila(it, duena, i, ultimo){
+    return '<div class="row compact lista' + (modoOrden ? ' ordenando' : '') + '"' +
+           (modoOrden ? '' : ' data-open="' + esc(it.ytId) + '"') +
+           ' data-en="' + esc(duena.id) + '">' +
       '<img class="th" src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
       '<div class="info">' +
         '<p class="ttl">' + esc(it.title) + '</p>' +
@@ -822,51 +744,81 @@ function renderLista(f){
           (it.kind === 'radio' ? '<span class="live">en vivo</span>' : esc(it.channel)) +
         '</div>' +
       '</div>' +
-      '<button class="x" data-rm="' + esc(it.ytId) + '" data-en="' + esc(duena.id) + '" title="Eliminar">&times;</button>' +
+      (modoOrden
+        ? '<div class="ord">' +
+            '<button data-up="' + i + '" data-en="' + esc(duena.id) + '" title="Subir"' +
+              (i === 0 ? ' disabled' : '') + '>&#9650;</button>' +
+            '<button data-down="' + i + '" data-en="' + esc(duena.id) + '" title="Bajar"' +
+              (i === ultimo ? ' disabled' : '') + '>&#9660;</button>' +
+          '</div>'
+        : '<button class="x" data-rm="' + esc(it.ytId) + '" data-en="' + esc(duena.id) +
+          '" title="Eliminar">&times;</button>') +
     '</div>';
+  }
+
+  function filas(carpeta, items){
+    var ultimo = items.length - 1;
+    return items.map(function(it, i){ return fila(it, carpeta, i, ultimo); }).join('');
   }
 
   var grupos = 0, mostrados = 0;
 
-  function grupo(nombres, carpeta, items){
-    var hay = items.filter(coincide);
-    /* Filtrando, un grupo sin nada que ver no ocupa lugar. */
-    if(filtrando && !hay.length) return;
+  function grupo(nombres, carpeta){
+    /* Ordenando trabajamos sobre la lista entera, sin filtrar: si no, las
+       flechas moverian el vecino equivocado. */
+    var items = modoOrden ? carpeta.items : carpeta.items.filter(coincide);
+    if(filtrando && !items.length) return;      /* sin nada que ver, no ocupa lugar */
     grupos++;
-    mostrados += hay.length;
-    /* Con filtro puesto los grupos se abren solos: si escribiste algo, lo
-       que buscas no puede estar escondido. */
-    var plegado = !filtrando && !!f.plegados[carpeta.id];
+    mostrados += items.length;
 
+    var plegado = !filtrando && !modoOrden && !!f.plegados[carpeta.id];
     html += '<div class="grupo' + (plegado ? ' plegado' : '') + '" data-grupo="' + esc(carpeta.id) + '">' +
       '<span class="flecha">' + (plegado ? '&#9654;' : '&#9660;') + '</span>' +
       esc(nombres[0]) +
       (nombres.length > 1 ? ' <span class="ruta">&rsaquo; ' + esc(nombres.slice(1).join(' > ')) + '</span>' : '') +
-      '<span class="n">' + hay.length + '</span></div>';
+      '<span class="n">' + items.length + '</span></div>';
 
-    if(!plegado) html += hay.map(function(it){ return fila(it, carpeta); }).join('');
+    if(!plegado) html += filas(carpeta, items);
   }
 
-  /* En el mismo orden en que se ven al navegar: madre, despues sus hijas. */
-  (function recorrer(padre){
-    hijasDe(padre).forEach(function(h){
-      grupo(rutaRelativa(f.id, h.id), h, h.items);
-      recorrer(h.id);
-    });
-  })(f.id);
+  if(!hijas.length){
+    /* Sin subcarpetas no hay nada que agrupar: las cosas, y listo. */
+    var propios = modoOrden ? f.items : f.items.filter(coincide);
+    mostrados = propios.length;
+    html += filas(f, propios);
+  } else {
+    /* En el mismo orden en que cuelgan: cada una y despues las suyas. */
+    (function recorrer(padre){
+      hijasDe(padre).forEach(function(h){
+        grupo(rutaRelativa(f.id, h.id), h);
+        recorrer(h.id);
+      });
+    })(f.id);
+    /* Lo suelto de la propia carpeta, al final, para que no quede sepultado. */
+    if(f.items.length) grupo(['Sueltas en ' + f.name], f);
+  }
 
-  if(f.items.length) grupo(['Sueltas en ' + f.name], f, f.items);
-
-  if(filtrando && !mostrados){
+  if(!total){
+    modoOrden = false;
+    html += '<div class="empty">Esta carpeta esta vacia.<br>' +
+            'Busca algo arriba y toca <b>+</b> en el resultado.</div>';
+  } else if(filtrando && !mostrados){
     html += '<div class="empty">Nada con <b>' + esc(filtro.trim()) + '</b> en ' + esc(f.name) + '.</div>';
   }
 
-  html += '<div class="foot">' +
-    (filtrando ? plural(mostrados, 'elemento', 'elementos') + ' con ese texto'
-               : plural(cuentaDe(f), 'elemento', 'elementos') + ' en ' + plural(grupos, 'grupo', 'grupos')) +
-    ' &middot; <a data-nuevasub>subcarpeta nueva</a>' +
-    ' &middot; vista: <a data-vista="carpetas">carpetas</a>' +
-    '</div>';
+  html += '<div class="foot">';
+  if(modoOrden){
+    html += 'Move cada uno con las flechas &middot; <a data-orden>listo</a>';
+  } else if(filtrando){
+    html += plural(mostrados, 'elemento', 'elementos') + ' con ese texto';
+  } else {
+    html += plural(total, 'elemento', 'elementos');
+    if(hijas.length) html += ' en ' + plural(grupos, 'grupo', 'grupos');
+    html += ' &middot; <a data-nuevasub>subcarpeta nueva</a>';
+    if(total > 1)             html += ' &middot; <a data-orden>ordenar</a>';
+    if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar carpeta</a>';
+  }
+  html += '</div>';
 
   $('#panel').innerHTML = html;
 }
@@ -874,7 +826,7 @@ function renderLista(f){
 /* Re-dibujar el panel se lleva puesto el foco del campo: hay que devolverlo
    con el cursor donde estaba, o no se puede escribir de corrido. */
 function refiltrar(){
-  renderLista(carpetaPorId(current));
+  renderFolder();
   var i = $('#filtro');
   if(i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
 }
@@ -1324,7 +1276,11 @@ function askNewFolder(padre){
     db.folders.push(f);
     save();
     closeModal();
-    current = f.id; results = null; render();
+    /* Una subcarpeta se ve como grupo nuevo ahi mismo; una carpeta de arriba
+       es una pestana nueva y a esa si conviene ir. */
+    if(!padre) current = f.id;
+    results = null;
+    render();
   }
 
   var madre = padre ? carpetaPorId(padre) : null;
@@ -1397,21 +1353,7 @@ $('#panel').addEventListener('click', function(e){
     if(!fg.plegados) fg.plegados = {};
     fg.plegados[a.dataset.grupo] = !fg.plegados[a.dataset.grupo];
     save();
-    renderLista(fg);
-    return;
-  }
-  if((a = e.target.closest('[data-vista]'))){
-    var fv = carpetaPorId(current);
-    fv.vista = a.dataset.vista;
-    filtro = '';
-    save();
-    render();
-    window.scrollTo(0, 0);
-    return;
-  }
-  if((a = e.target.closest('[data-sub]'))){
-    current = a.dataset.sub; results = null; modoOrden = false; render();
-    window.scrollTo(0, 0);
+    renderFolder();
     return;
   }
   if(e.target.closest('[data-nuevasub]')){ askNewFolder(current); return; }
@@ -1428,9 +1370,14 @@ $('#panel').addEventListener('click', function(e){
       });
     return;
   }
-  if((a = e.target.closest('[data-up]')))   { mover(+a.dataset.up,   -1); return; }
-  if((a = e.target.closest('[data-down]'))) { mover(+a.dataset.down,  1); return; }
-  if(e.target.closest('[data-orden]'))      { modoOrden = !modoOrden; render(); return; }
+  if((a = e.target.closest('[data-up]')))   { mover(a.dataset.en, +a.dataset.up,   -1); return; }
+  if((a = e.target.closest('[data-down]'))) { mover(a.dataset.en, +a.dataset.down,  1); return; }
+  if(e.target.closest('[data-orden]')){
+    modoOrden = !modoOrden;
+    filtro = '';        /* ordenando se trabaja sobre la lista entera */
+    render();
+    return;
+  }
   if(e.target.closest('[data-more]'))       { doSearch(results.next); return; }
   if(e.target.closest('[data-abrirclave]')) { askKey(); return; }
 
@@ -1455,8 +1402,8 @@ $('#panel').addEventListener('click', function(e){
 
 /* Intercambia con el vecino: alcanza para acomodar una lista a mano y no
    necesita arrastrar, que en tactil pelea con el scroll de la pagina. */
-function mover(i, paso){
-  var f = db.folders.filter(function(x){ return x.id === current; })[0];
+function mover(carpetaId, i, paso){
+  var f = carpetaPorId(carpetaId);
   var j = i + paso;
   if(j < 0 || j >= f.items.length) return;
   var tmp = f.items[i]; f.items[i] = f.items[j]; f.items[j] = tmp;
@@ -1595,7 +1542,6 @@ function unirCarpeta(x, y){
   return {
     id: x.id,
     padre:      x.padre || y.padre || null,
-    vista:      x.vista || y.vista || null,
     plegados:   x.plegados || y.plegados || {},
     name:       (y.nombreEn || 0) > (x.nombreEn || 0) ? y.name : x.name,
     nombreEn:   Math.max(x.nombreEn || 0, y.nombreEn || 0),
