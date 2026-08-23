@@ -12,6 +12,23 @@ Pensada para lanzar radios en vivo como transmision de fondo.
 - Las carpetas viven en el navegador (`localStorage`), no en Google.
 - Al tocar un item se abre YouTube y reproduce ahi.
 
+## Arriba a la derecha
+
+Cuatro iconos, con el nombre en el tooltip: **luna/sol** cambia el tema,
+**llave** es la clave de la API, **muñeco** es el perfil y **engranaje** abre
+la configuracion, que es donde viven el respaldo y la sincronizacion. Cuando
+la sincronizacion falla, el engranaje lleva un punto rojo.
+
+## Resultados
+
+Se piden 50 por busqueda y se ordenan **de mas reproducciones a menos**. El
+numero no viene con la busqueda: hay que pedirlo aparte a `videos.list`, que
+cuesta 1 unidad para los 50 juntos. Si ese pedido falla, los resultados se
+muestran igual, sin numeros y en el orden de la API.
+
+Los titulos de la API vienen escapados como HTML (`&quot;`, `&amp;`), asi que
+se desarman antes de mostrarlos y antes de guardarlos.
+
 ## Radios
 
 Una radio se guarda como **canal**, no como video: el ID de un stream
@@ -103,7 +120,7 @@ publiques ni lo dejes en un chat.
 
 1. Habilitar *YouTube Data API v3* en Google Cloud y crear una **clave de API**
    (datos publicos, no OAuth).
-2. Abrir la app y tocar **clave** arriba a la derecha.
+2. Abrir la app y tocar la **llave** arriba a la derecha.
 
 La clave queda solo en el navegador; no esta en el codigo.
 Cuota: ~100 busquedas por dia.

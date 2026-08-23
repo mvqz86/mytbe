@@ -119,8 +119,17 @@ a:visited{color:var(--link-v)}
   color:#fff;background:var(--red);border-radius:7px;
   padding:2px 6px 3px;margin-left:2px;display:inline-block
 }
-.topright{margin-left:auto;text-align:right;font-size:11px;color:var(--ink-4);line-height:1.6}
-.topright a{font-size:11px;margin-left:7px}
+.topright{margin-left:auto;text-align:right;font-size:11px;color:var(--ink-4);line-height:1.4}
+/* Iconos en vez de palabras: ocupan menos, se tocan mejor y no compiten con
+   los links azules del contenido. El nombre vive en el tooltip. */
+.ico{display:inline-flex;align-items:center;justify-content:center;
+  width:34px;height:34px;font-size:17px;text-decoration:none;position:relative;
+  border-radius:4px;margin:0}
+.ico:active{background:var(--x-hit)}
+/* Punto rojo cuando la sincronizacion se queja: es lo unico del menu que
+   necesita avisar sin que lo abran. */
+.ico.alerta::after{content:"";position:absolute;top:4px;right:4px;width:7px;height:7px;
+  border-radius:50%;background:var(--red-text)}
 
 /* ---- pestanas ---- */
 .tabswrap{position:relative}
@@ -316,7 +325,10 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .pick small{display:block;color:var(--ink-3);font-size:10.5px;margin-top:2px}
 .pick.nueva,.pick.volver{text-align:center;color:var(--link);background:var(--panel)}
 .pick.nueva{border-style:dashed}
-.hint{font-size:11px;color:var(--ink-2);margin:10px 0 6px;font-weight:bold}
+.hint{font-size:11px;color:var(--ink-2);margin:14px 0 4px;font-weight:bold;
+  text-transform:uppercase;letter-spacing:.07em}
+.body > .hint:first-child{margin-top:0}
+.box .mal{color:var(--red-text)}
 .box .close{width:100%;margin-top:4px}
 .box .close.peligro{color:#fff;border-color:var(--peligro-edge);
   background:linear-gradient(var(--peligro-a),var(--peligro-b))}
@@ -343,7 +355,10 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
     <div class="logo"><span class="a">my</span><span class="b">tbe</span></div>
     <div class="topright">
       <span id="quota">0/100 hoy</span><br>
-      <a id="themelink">modo oscuro</a><a id="keylink">clave</a><a id="perfillink">perfil</a>
+      <a id="themelink" class="ico" title="Modo oscuro">&#127769;</a><!--
+   --><a id="keylink" class="ico" title="Clave de API">&#128273;</a><!--
+   --><a id="perfillink" class="ico" title="Perfil">&#128100;</a><!--
+   --><a id="menulink" class="ico" title="Configuracion">&#9881;&#65039;</a>
     </div>
   </div>
 
@@ -366,8 +381,7 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
   <div class="panel" id="panel"></div>
 
   <div class="pagefoot">
-    respaldo: <a id="exp">descargar copia</a> &middot; <a id="imp">restaurar copia</a><br>
-    sincronizacion: <span id="syncestado">apagada</span> &middot; <a id="sync">configurar</a>
+    &nbsp;
   </div>
   <input type="file" id="file" accept="application/json,.json" hidden>
 
@@ -420,6 +434,18 @@ function normalizar(d){
   if(!d.borrados)     d.borrados = {};
   if(!d.vaciadoEn)    d.vaciadoEn = 0;
   if(!d.gist)         d.gist = {};
+
+  /* Lo guardado antes de este arreglo tiene las entidades adentro. */
+  d.folders.forEach(function(f){
+    (f.items || []).forEach(function(it){
+      it.title = limpiarTexto(it.title);
+      it.channel = limpiarTexto(it.channel);
+    });
+  });
+  d.reproducidos.forEach(function(r){
+    r.title = limpiarTexto(r.title);
+    r.channel = limpiarTexto(r.channel);
+  });
   /* Una marca de borrado vieja ya no le gana a nada: se puede tirar. */
   var limite = Date.now() - 60 * 24 * 60 * 60 * 1000;
   for(var k in d.borrados) if(d.borrados[k] < limite) delete d.borrados[k];
@@ -472,6 +498,21 @@ if(navigator.storage && navigator.storage.persist){
 
 /* ============ utilidades ============ */
 function $(s){ return document.querySelector(s); }
+/* La API devuelve los titulos ya escapados como HTML: "Live &quot;Slane&quot;".
+   Al escaparlos otra vez para pintarlos, el &quot; quedaba a la vista. Hay que
+   desarmarlos primero, y recien despues escapar para mostrar. */
+function limpiarTexto(t){
+  return String(t == null ? '' : t)
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, function(_, n){ return String.fromCharCode(+n); })
+    .replace(/&amp;/g, '&');   /* ultimo, o revive las entidades ya desarmadas */
+}
+
 function esc(s){
   return String(s).replace(/[&<>"]/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
@@ -487,6 +528,38 @@ function bumpQuota(){
   if(db.quota.date !== today()) db.quota = {date:today(), count:0};
   db.quota.count++; save(); renderQuota();
 }
+
+/* "1,2 M" antes que "1234567": el numero exacto no le importa a nadie, el
+   orden de magnitud si. */
+function vistas(n){
+  n = +n || 0;
+  if(!n) return '';
+  if(n >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1).replace('.', ',') + ' M';
+  if(n >= 1000)    return Math.round(n / 1000) + ' mil';
+  return String(n);
+}
+
+/* search.list no trae cuantas veces se vio cada video: hay que pedirlo aparte
+   a videos.list, que cuesta 1 unidad para los 50 juntos. */
+function traerVistas(items){
+  var ids = items.map(function(it){ return it.id.videoId; }).join(',');
+  if(!ids) return Promise.resolve(items);
+  return fetch('https://www.googleapis.com/youtube/v3/videos?part=statistics&id=' +
+               encodeURIComponent(ids) + '&key=' + encodeURIComponent(getKey()))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var mapa = {};
+      (d.items || []).forEach(function(v){
+        mapa[v.id] = +((v.statistics && v.statistics.viewCount) || 0);
+      });
+      items.forEach(function(it){ it.vistas = mapa[it.id.videoId] || 0; });
+      return items;
+    })
+    /* Si esto falla, la busqueda igual sirve: se muestra sin numeros. */
+    .catch(function(){ return items; });
+}
+
+function porVistas(a, b){ return (b.vistas || 0) - (a.vistas || 0); }
 
 /* Las miniaturas de un vivo mueren con la transmision.
    Sin fondo propio: se apoya en el color de .th, asi sirve en los dos temas. */
@@ -845,9 +918,10 @@ function renderResults(){
     return '<div class="row" data-play="' + i + '">' +
       '<img class="th" src="' + esc(th) + '" alt="" onerror="imgFallback(this)">' +
       '<div class="info">' +
-        '<p class="ttl">' + esc(s.title) + '</p>' +
+        '<p class="ttl">' + esc(limpiarTexto(s.title)) + '</p>' +
         '<div class="sub">' + (live ? '<span class="live">EN VIVO</span> &middot; ' : '') +
-          'de <b>' + esc(s.channelTitle) + '</b>' +
+          'de <b>' + esc(limpiarTexto(s.channelTitle)) + '</b>' +
+          (it.vistas ? ' &middot; ' + esc(vistas(it.vistas)) + ' reproducciones' : '') +
           (ya ? ' &middot; <span class="saved">&#10003; en ' + esc(ya) + '</span>' : '') +
         '</div>' +
       '</div>' +
@@ -943,23 +1017,26 @@ function doSearch(token){
           return !liveOnly || (it.snippet && it.snippet.liveBroadcastContent === 'live');
         });
 
-      if(token){
-        results.items = results.items.concat(items);
-        results.next  = data.nextPageToken || '';
-        render();                       /* el scroll se queda donde estaba */
-        return;
-      }
-
-      if(!items.length){
+      if(!items.length && !token){
         results = null; render();
         $('#panel').innerHTML = '<div class="empty">Sin resultados para <b>' + esc(q) + '</b>.' +
           (liveOnly ? '<br>Puede que no haya nadie transmitiendo ahora.' : '') + '</div>';
         return;
       }
 
-      results = {q:q, items:items, next:data.nextPageToken || '', liveOnly:liveOnly};
-      render();
-      window.scrollTo(0,0);
+      /* Con los numeros en la mano se ordena de mas visto a menos. */
+      return traerVistas(items).then(function(conVistas){
+        if(token){
+          results.items = results.items.concat(conVistas).sort(porVistas);
+          results.next  = data.nextPageToken || '';
+          render();                     /* el scroll se queda donde estaba */
+          return;
+        }
+        results = {q:q, items:conVistas.sort(porVistas), next:data.nextPageToken || '',
+                   liveOnly:liveOnly};
+        render();
+        window.scrollTo(0,0);
+      });
     })
     .catch(function(err){
       var m = traducirError(err);
@@ -982,8 +1059,8 @@ function askSave(idx){
     live:      s.liveBroadcastContent === 'live',
     videoId:   it.id.videoId,
     channelId: s.channelId,
-    title:     s.title,
-    channel:   s.channelTitle,
+    title:     limpiarTexto(s.title),
+    channel:   limpiarTexto(s.channelTitle),
     thumb:     (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || ''
   });
 }
@@ -1239,7 +1316,8 @@ function aplicarTema(){
   else        document.documentElement.removeAttribute('data-theme');
 
   var oscuro = temaEfectivo() === 'dark';
-  $('#themelink').textContent = oscuro ? 'modo claro' : 'modo oscuro';
+  $('#themelink').innerHTML = oscuro ? '&#9728;&#65039;' : '&#127769;';
+  $('#themelink').title = oscuro ? 'Modo claro' : 'Modo oscuro';
   /* Que la barra del navegador y la del sistema acompanen */
   var m = document.querySelector('meta[name="theme-color"]');
   if(m) m.setAttribute('content', oscuro ? '#171b21' : '#dfe6ec');
@@ -1388,8 +1466,8 @@ $('#panel').addEventListener('click', function(e){
     launch({kind:'video', ytId: rr.id.videoId}, {
       kind:    envivo ? 'radio' : 'video',
       ytId:    envivo ? sn.channelId : rr.id.videoId,
-      title:   envivo ? sn.channelTitle : sn.title,
-      channel: sn.channelTitle,
+      title:   limpiarTexto(envivo ? sn.channelTitle : sn.title),
+      channel: limpiarTexto(sn.channelTitle),
       thumb:   (sn.thumbnails && sn.thumbnails.medium && sn.thumbnails.medium.url) || ''
     });
     return;
@@ -1414,14 +1492,14 @@ function mover(carpetaId, i, paso){
 /* ============ respaldo ============
    Las carpetas viven solo en localStorage: si se limpian los datos del
    navegador, se pierden. Esto es la unica copia posible. */
-$('#exp').onclick = function(){
+function descargarRespaldo(){
   var total = db.folders.reduce(function(a,f){ return a + f.items.length; }, 0);
   if(!total){
     confirmar('No hay nada guardado', 'El archivo va a salir vacio.', 'Descargar igual', bajar);
     return;
   }
   bajar();
-};
+}
 
 function bajar(){
   /* La clave viaja en el respaldo: restaurar en un telefono nuevo deja la app
@@ -1439,8 +1517,6 @@ function bajar(){
   a.remove();
   setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
 }
-
-$('#imp').onclick = function(){ $('#file').click(); };
 
 $('#file').onchange = function(e){
   var f = e.target.files[0];
@@ -1698,11 +1774,16 @@ function aplicar(unido){
   render();
 }
 
+/* Ya no hay renglon en el pie: el estado vive en el menu, y afuera solo se
+   asoma como un punto rojo en el engranaje cuando algo anda mal. */
+var syncDice = 'apagada', syncMal = false;
+
 function estadoSync(txt, mal){
-  var e = $('#syncestado');
-  if(!e) return;
-  e.textContent = txt;
-  e.className = mal ? 'mal' : '';
+  syncDice = txt;
+  syncMal = !!mal;
+  $('#menulink').classList.toggle('alerta', syncMal);
+  var e = $('#cfgsync');
+  if(e){ e.textContent = txt; e.className = mal ? 'mal' : ''; }
 }
 
 function contarSync(){
@@ -2016,7 +2097,7 @@ function entrar(perfil, llave){
     modoOrden = false;
     localStorage.setItem(ACTUAL, perfil.id);
     $('#candado').hidden = true;
-    $('#perfillink').textContent = perfiles.length > 1 ? perfil.nombre : 'perfil';
+    $('#perfillink').title = 'Perfil: ' + perfil.nombre;
     contarSync();
     renderQuota();
     render();
@@ -2163,9 +2244,8 @@ function askNuevoPerfil(){
         perfiles.push(nuevo);
         guardarPerfiles();
         closeModal();
-        $('#perfillink').textContent = perfilActual.nombre;
-        avisar('Listo', 'Ya existe <b>' + esc(nombre) + '</b>. Para entrar: <b>perfil</b> ' +
-                        'y despues <b>cambiar de perfil</b>.');
+        avisar('Listo', 'Ya existe <b>' + esc(nombre) + '</b>. Para entrar, tocá el ' +
+                        'muñequito de arriba y despues <b>cambiar de perfil</b>.');
       };
 
       if(!clave){ localStorage.setItem(DATOS + nuevo.id, datos); listo(); return; }
@@ -2217,6 +2297,33 @@ function askClavePerfil(){
   $('#c1').focus();
 }
 
+/* ============ configuracion ============
+   Todo lo que antes eran links de texto al pie. Se guarda detras del
+   engranaje: son cosas que se tocan una vez cada tanto y no tienen por que
+   estar a la vista todo el tiempo. */
+function askConfig(){
+  openModal(
+    '<h3>Configuracion</h3><div class="body">' +
+      '<div class="hint">Respaldo</div>' +
+      '<p class="segnote">Las carpetas viven en este navegador. Esta es la copia.</p>' +
+      '<button class="close" data-bajar>Descargar copia</button>' +
+      '<button class="close" data-subir>Restaurar copia</button>' +
+
+      '<div class="hint">Sincronizacion</div>' +
+      '<p class="segnote">Estado: <span id="cfgsync"' + (syncMal ? ' class="mal"' : '') + '>' +
+        esc(syncDice) + '</span></p>' +
+      '<button class="close" data-sync>' + (haySync() ? 'Ver la sincronizacion' : 'Conectar la sincronizacion') + '</button>' +
+
+      '<button class="close" data-cancel>Cerrar</button>' +
+    '</div>',
+    function(e){
+      if(e.target.closest('[data-bajar]')){ closeModal(); descargarRespaldo(); return; }
+      if(e.target.closest('[data-subir]')){ closeModal(); $('#file').click(); return; }
+      if(e.target.closest('[data-sync]')){ closeModal(); askSync(); return; }
+      if(e.target.closest('[data-cancel]')) closeModal();
+    });
+}
+
 /* ============ instalable ============
    Sin service worker, Android la agrega como acceso directo con barra de
    navegador en vez de app con icono propio. */
@@ -2241,8 +2348,8 @@ $('#panel').addEventListener('input', function(e){
 $('#tabs').addEventListener('scroll', sombrasTabs);
 window.addEventListener('resize', sombrasTabs);
 
-$('#sync').onclick = askSync;
 $('#perfillink').onclick = askPerfil;
+$('#menulink').onclick = askConfig;
 
 aplicarTema();
 estadoRed();
