@@ -244,40 +244,6 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .th.icono{display:flex;align-items:center;justify-content:center;font-size:21px;
   background:var(--thumb);border-color:var(--thumb-edge)}
 
-/* ---- piel grilla ----
-   Solo para las solapas donde lo que se mira son tapas y no renglones. Rompe
-   a proposito con el biselado del resto: aca no hay cajas plateadas ni
-   degradados, hay arte cuadrado y nada mas. El resto de la app no se toca. */
-.grilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));
-  gap:12px 10px;margin:12px 0 4px}
-.carta{position:relative;cursor:pointer;min-width:0}
-.arte{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;border-radius:9px;
-  background:var(--thumb);box-shadow:0 2px 8px var(--shadow);transition:transform .12s}
-.arte img{width:100%;height:100%;object-fit:cover;display:block}
-.carta:active .arte{transform:scale(.965)}
-@media (prefers-reduced-motion:reduce){.arte{transition:none}}
-
-/* La marca de tiempo va sobre el arte, como en cualquier reproductor. */
-.chip{position:absolute;right:5px;bottom:5px;padding:2px 5px;border-radius:4px;
-  background:rgba(0,0,0,.78);color:#fff;font:bold 10px Arial,Helvetica,sans-serif;
-  font-variant-numeric:tabular-nums;letter-spacing:.02em}
-.chip.envivo{background:var(--red)}
-.chip.eslista{background:var(--sel)}
-.tapar{position:absolute;top:5px;right:5px;width:26px;height:26px;padding:0;border:none;
-  border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:1}
-.carta .t{font:bold 12px/1.3 Arial,Helvetica,sans-serif;color:var(--ink);margin:7px 0 2px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.carta .c{font-size:10.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.carta.marcado .arte{outline:3px solid var(--sel);outline-offset:-3px}
-.carta.apagada{opacity:.4}
-.orden-num{position:absolute;top:5px;left:5px;min-width:24px;height:24px;padding:0 6px;
-  display:flex;align-items:center;justify-content:center;border-radius:12px;
-  background:var(--sel);color:#fff;font:bold 12px Arial,Helvetica,sans-serif}
-
-/* El interruptor de piel: chiquito, arriba a la derecha del panel. */
-.piel{display:flex;justify-content:flex-end;margin:-2px -2px 0}
-.piel button{width:34px;height:30px;padding:0;font-size:14px;line-height:1}
-
 /* ---- vista lista ----
    La subcarpeta deja de ser un lugar al que se entra y pasa a ser un
    encabezado. La cabecera se queda pegada arriba mientras se scrollea, que
@@ -1047,15 +1013,7 @@ function renderFolder(){
 
   var buscado = pelar(filtro.trim()), filtrando = !!buscado;
   var hijas = hijasDe(f.id), total = cuentaDe(f);
-  /* Ordenando siempre en lista: las flechas necesitan un arriba y un abajo. */
-  var grilla = f.piel === 'grilla' && !modoOrden;
   var html = '';
-
-  if(total){
-    html += '<div class="piel"><button data-piel="' + (grilla ? 'lista' : 'grilla') + '" title="' +
-      (grilla ? 'Ver en lista' : 'Ver en tapas') + '">' +
-      (grilla ? '&#9776;' : '&#9638;') + '</button></div>';
-  }
 
   /* El filtro aparece cuando hay algo que filtrar. En una carpeta de dos
      cosas seria un campo de mas. */
@@ -1113,35 +1071,7 @@ function renderFolder(){
     '</div>';
   }
 
-  /* Misma informacion que la fila, en tapa: arte cuadrado, el tiempo encima
-     y el titulo abajo. */
-  function carta(it, duena){
-    var elegible = modoElegir && it.kind === 'video';
-    var marcado = elegible && posicionElegido(it.ytId) > -1;
-    var chip = it.kind === 'radio'   ? '<span class="chip envivo">EN VIVO</span>'
-             : it.kind === 'playlist'? '<span class="chip eslista">&#9654; ' + (it.ytIds || []).length + '</span>'
-             : it.dura               ? '<span class="chip">' + esc(it.dura) + '</span>' : '';
-
-    return '<div class="carta' + (marcado ? ' marcado' : '') +
-             (modoElegir && !elegible ? ' apagada' : '') + '"' +
-           (modoElegir ? '' : ' data-open="' + esc(it.ytId) + '"') +
-           (elegible ? ' data-elegir="' + esc(it.ytId) + '"' : '') +
-           ' data-en="' + esc(duena.id) + '">' +
-      '<div class="arte">' +
-        '<img src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
-        chip +
-        (marcado ? '<span class="orden-num">' + (posicionElegido(it.ytId) + 1) + '</span>' : '') +
-        (modoElegir ? '' : '<button class="tapar" data-rm="' + esc(it.ytId) + '" data-en="' +
-          esc(duena.id) + '" title="Eliminar">&times;</button>') +
-      '</div>' +
-      '<div class="t">' + esc(it.title) + '</div>' +
-      '<div class="c">' + esc(it.kind === 'radio' ? it.channel : (it.channel || '')) + '</div>' +
-    '</div>';
-  }
-
   function filas(carpeta, items){
-    if(grilla) return '<div class="grilla">' +
-      items.map(function(it){ return carta(it, carpeta); }).join('') + '</div>';
     var ultimo = items.length - 1;
     return items.map(function(it, i){ return fila(it, carpeta, i, ultimo); }).join('');
   }
@@ -1835,13 +1765,6 @@ $('#panel').addEventListener('click', function(e){
 
   /* Ordenar y traer mas van antes del disparo: viven dentro de la fila y
      closest() las taparia. */
-  if((a = e.target.closest('[data-piel]'))){
-    var fp = carpetaPorId(current);
-    fp.piel = a.dataset.piel === 'grilla' ? 'grilla' : null;
-    save();
-    render();
-    return;
-  }
   if((a = e.target.closest('[data-todos]'))){
     var suyos = videosDeGrupo(a.dataset.todos);
     var puestos = suyos.every(function(i){ return posicionElegido(i.ytId) > -1; });
@@ -2071,7 +1994,6 @@ function unirCarpeta(x, y){
     id: x.id,
     padre:      x.padre || y.padre || null,
     plegados:   x.plegados || y.plegados || {},
-    piel:       x.piel || y.piel || null,
     name:       (y.nombreEn || 0) > (x.nombreEn || 0) ? y.name : x.name,
     nombreEn:   Math.max(x.nombreEn || 0, y.nombreEn || 0),
     creadaEn:   Math.max(x.creadaEn || 0, y.creadaEn || 0),
