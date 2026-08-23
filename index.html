@@ -348,7 +348,8 @@ function defaults(){
       {id:'documentales', name:'Documentales', items:[]},
       {id:'verdespues',   name:'Ver despues',  items:[]}
     ],
-    quota: {date:'', count:0}
+    quota: {date:'', count:0},
+    reproducidos: []
   };
 }
 var db;
@@ -356,6 +357,7 @@ try { db = JSON.parse(localStorage.getItem(LS)) || defaults(); }
 catch(e){ db = defaults(); }
 if(!db || !db.folders || !db.folders.length) db = defaults();
 if(!db.quota) db.quota = {date:'', count:0};
+if(!db.reproducidos) db.reproducidos = [];
 function save(){ localStorage.setItem(LS, JSON.stringify(db)); }
 
 function getKey(){ return localStorage.getItem('mytbe.key') || ''; }
@@ -425,6 +427,41 @@ function fetchChannelAvatar(channelId){
     .catch(function(){ return null; });
 }
 
+/* ============ reproducidos ============
+   Lo que abriste, no lo que buscaste. Sirve para volver a algo que pusiste
+   ayer y no llegaste a guardar, sin gastar otra busqueda en encontrarlo.
+   Dura tres dias y se limpia solo. */
+var RECIENTES = '@recientes';
+var DIAS = 3, VIDA = DIAS * 24 * 60 * 60 * 1000;
+
+function podarReproducidos(){
+  var limite = Date.now() - VIDA, antes = db.reproducidos.length;
+  db.reproducidos = db.reproducidos.filter(function(r){ return r.cuando > limite; }).slice(0, 60);
+  return db.reproducidos.length !== antes;
+}
+
+function anotarReproducido(item){
+  /* Uno solo por cosa: si lo volves a abrir sube arriba con la hora nueva. */
+  db.reproducidos = db.reproducidos.filter(function(r){ return r.ytId !== item.ytId; });
+  db.reproducidos.unshift({
+    ytId: item.ytId, kind: item.kind, title: item.title || '',
+    channel: item.channel || '', thumb: item.thumb || '', cuando: Date.now()
+  });
+  podarReproducidos();
+  save();
+}
+
+/* "hace 20 min", "ayer", "hace 2 dias": lo justo para ubicarse. */
+function hace(ts){
+  var m = Math.round((Date.now() - ts) / 60000);
+  if(m < 2)   return 'recien';
+  if(m < 60)  return 'hace ' + m + ' min';
+  var h = Math.round(m / 60);
+  if(h < 24)  return 'hace ' + h + (h === 1 ? ' hora' : ' horas');
+  var d = Math.round(h / 24);
+  return d === 1 ? 'ayer' : 'hace ' + d + ' dias';
+}
+
 /* ============ lanzar a YouTube ============ */
 /* Radio: el vivo actual del canal, aunque el stream se haya reiniciado. */
 function urlFor(item){
@@ -432,7 +469,11 @@ function urlFor(item){
     ? 'https://www.youtube.com/channel/' + item.ytId + '/live'
     : 'https://www.youtube.com/watch?v=' + item.ytId;
 }
-function launch(item){
+/* A veces lo que conviene abrir y lo que conviene anotar no son lo mismo:
+   de un vivo se abre el stream que tocaste, pero se anota el canal, que es
+   lo que va a seguir sirviendo pasado manana. */
+function launch(item, anotar){
+  anotarReproducido(anotar || item);
   window.open(urlFor(item), '_blank', 'noopener');
 }
 
@@ -455,7 +496,10 @@ function renderTabs(){
   $('#tabs').innerHTML = db.folders.map(function(f){
     return '<button class="tab' + (!results && f.id === current ? ' on' : '') +
            '" data-tab="' + esc(f.id) + '">' + esc(f.name) + '</button>';
-  }).join('') + '<button class="tab nueva" data-newfolder title="Nueva carpeta">+</button>';
+  }).join('') +
+    '<button class="tab' + (!results && current === RECIENTES ? ' on' : '') +
+      '" data-tab="' + RECIENTES + '">Recientes</button>' +
+    '<button class="tab nueva" data-newfolder title="Nueva carpeta">+</button>';
 
   var activa = $('#tabs').querySelector('.tab.on');
   if(activa && activa.scrollIntoView) activa.scrollIntoView({block:'nearest', inline:'nearest'});
@@ -471,7 +515,43 @@ function sombrasTabs(){
 
 function render(){
   renderTabs();
-  results ? renderResults() : renderFolder();
+  if(results)                 renderResults();
+  else if(current === RECIENTES) renderRecientes();
+  else                        renderFolder();
+}
+
+/* ---- recientes ---- */
+function renderRecientes(){
+  if(podarReproducidos()) save();
+  var html = '';
+
+  if(!db.reproducidos.length){
+    html = '<div class="empty">Todavia no abriste nada.<br>' +
+           'Lo que dispares queda aca ' + DIAS + ' dias, por si despues lo queres guardar.</div>';
+  } else {
+    html = db.reproducidos.map(function(r, i){
+      var ya = carpetaDe(r.ytId);
+      return '<div class="row compact" data-abrir="' + i + '">' +
+        '<img class="th" src="' + esc(r.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
+        '<div class="info">' +
+          '<p class="ttl">' + esc(r.title || 'Sin titulo') + '</p>' +
+          '<div class="sub">' + esc(hace(r.cuando)) +
+            (r.channel ? ' &middot; ' + esc(r.channel) : '') +
+            (ya ? ' &middot; <span class="saved">&#10003; en ' + esc(ya) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<button class="add' + (ya ? ' on' : '') + '" data-guardar="' + i + '" title="' +
+          (ya ? 'Ya esta en ' + esc(ya) : 'Guardar en una carpeta') + '">' +
+          (ya ? '&#10003;' : '+') + '</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  html += '<div class="foot">Lo abierto en los ultimos ' + DIAS + ' dias';
+  if(db.reproducidos.length) html += ' &middot; <a data-vaciar>vaciar</a>';
+  html += '</div>';
+
+  $('#panel').innerHTML = html;
 }
 
 /* ---- carpeta ---- */
@@ -666,13 +746,39 @@ function doSearch(token){
     });
 }
 
-/* ============ guardar ============ */
+/* ============ guardar ============
+   El cuadro es el mismo venga de una busqueda o de recientes, asi que recibe
+   una forma neutra en vez del snippet crudo de la API. */
 function askSave(idx){
   var it = results.items[idx], s = it.snippet;
-  var live = s.liveBroadcastContent === 'live';
+  askGuardar({
+    live:      s.liveBroadcastContent === 'live',
+    videoId:   it.id.videoId,
+    channelId: s.channelId,
+    title:     s.title,
+    channel:   s.channelTitle,
+    thumb:     (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || ''
+  });
+}
+
+function deReciente(r){
+  return {
+    live:      r.kind === 'radio',
+    videoId:   r.kind === 'video' ? r.ytId : '',
+    channelId: r.kind === 'radio' ? r.ytId : '',
+    title:     r.title,
+    channel:   r.channel || r.title,
+    thumb:     r.thumb
+  };
+}
+
+function askGuardar(base){
   /* Para una radio conviene guardar el CANAL: el ID del video muere cada vez
      que la transmision se reinicia, el canal no. */
-  var kind = live ? 'radio' : 'video';
+  var kind = base.live ? 'radio' : 'video';
+  /* La eleccion solo tiene sentido si tenemos las dos cosas; desde recientes
+     ya viene resuelta. */
+  var elegible = base.live && base.videoId && base.channelId;
 
   var NOTA = {
     radio: 'Sigue al canal: abre lo que este al aire, hoy y dentro de un ano.',
@@ -708,7 +814,7 @@ function askSave(idx){
   }
 
   function guardarEn(folder){
-    var ytId = kind === 'radio' ? s.channelId : it.id.videoId;
+    var ytId = kind === 'radio' ? base.channelId : base.videoId;
     if(folder.items.some(function(x){ return x.ytId === ytId; })){
       closeModal();
       avisar('Ya estaba guardado', 'Esto ya esta en <b>' + esc(folder.name) + '</b>.');
@@ -717,9 +823,9 @@ function askSave(idx){
     var nuevo = {
       kind: kind,
       ytId: ytId,
-      title:   kind === 'radio' ? s.channelTitle : s.title,
-      channel: s.channelTitle,
-      thumb:   (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || '',
+      title:   kind === 'radio' ? base.channel : base.title,
+      channel: base.channel,
+      thumb:   base.thumb || '',
       addedAt: Date.now()
     };
     folder.items.unshift(nuevo);
@@ -739,8 +845,8 @@ function askSave(idx){
 
   openModal(
     '<h3>Guardar</h3><div class="body">' +
-      '<p class="what">' + esc(s.title.slice(0,90)) + '</p>' +
-      (live ?
+      '<p class="what">' + esc(String(base.title).slice(0,90)) + '</p>' +
+      (elegible ?
         '<div class="seg" id="seg">' +
           '<button data-kind="radio" class="on">la radio</button>' +
           '<button data-kind="video">este stream</button>' +
@@ -983,6 +1089,15 @@ $('#panel').addEventListener('click', function(e){
 
   /* Ordenar y traer mas van antes del disparo: viven dentro de la fila y
      closest() las taparia. */
+  if((a = e.target.closest('[data-guardar]'))){
+    askGuardar(deReciente(db.reproducidos[+a.dataset.guardar])); return;
+  }
+  if((a = e.target.closest('[data-abrir]')))  { launch(db.reproducidos[+a.dataset.abrir]); return; }
+  if(e.target.closest('[data-vaciar]')){
+    confirmar('Vaciar recientes', 'Se borra la lista de lo que abriste. Lo guardado en carpetas no se toca.',
+      'Vaciar', function(){ db.reproducidos = []; save(); render(); });
+    return;
+  }
   if((a = e.target.closest('[data-up]')))   { mover(+a.dataset.up,   -1); return; }
   if((a = e.target.closest('[data-down]'))) { mover(+a.dataset.down,  1); return; }
   if(e.target.closest('[data-orden]'))      { modoOrden = !modoOrden; render(); return; }
@@ -991,7 +1106,16 @@ $('#panel').addEventListener('click', function(e){
 
   /* Recien ahora: el disparo, que ocupa toda la fila. */
   if((a = e.target.closest('[data-play]'))){
-    launch({kind:'video', ytId: results.items[a.dataset.play].id.videoId}); return;
+    var rr = results.items[a.dataset.play], sn = rr.snippet;
+    var envivo = sn.liveBroadcastContent === 'live';
+    launch({kind:'video', ytId: rr.id.videoId}, {
+      kind:    envivo ? 'radio' : 'video',
+      ytId:    envivo ? sn.channelId : rr.id.videoId,
+      title:   envivo ? sn.channelTitle : sn.title,
+      channel: sn.channelTitle,
+      thumb:   (sn.thumbnails && sn.thumbnails.medium && sn.thumbnails.medium.url) || ''
+    });
+    return;
   }
   if((a = e.target.closest('[data-open]'))){
     var fo = db.folders.filter(function(x){ return x.id === current; })[0];
