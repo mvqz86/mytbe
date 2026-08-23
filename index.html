@@ -242,6 +242,7 @@ select{
 /* Pie de pagina, como los del sitio de la epoca */
 .pagefoot{text-align:center;font-size:11px;color:var(--foot-ink);padding:14px 8px 4px;line-height:2}
 .pagefoot a{margin:0 4px;padding:4px 2px;display:inline-block}
+.pagefoot #syncestado.mal{color:var(--red-text)}
 .loading{text-align:center;padding:44px;color:var(--ink-3);font-size:12px}
 
 /* ---- modal ---- */
@@ -319,7 +320,8 @@ select{
   <div class="panel" id="panel"></div>
 
   <div class="pagefoot">
-    respaldo: <a id="exp">descargar copia</a> &middot; <a id="imp">restaurar copia</a>
+    respaldo: <a id="exp">descargar copia</a> &middot; <a id="imp">restaurar copia</a><br>
+    sincronizacion: <span id="syncestado">apagada</span> &middot; <a id="sync">configurar</a>
   </div>
   <input type="file" id="file" accept="application/json,.json" hidden>
 
@@ -349,7 +351,11 @@ function defaults(){
       {id:'verdespues',   name:'Ver despues',  items:[]}
     ],
     quota: {date:'', count:0},
-    reproducidos: []
+    reproducidos: [],
+    /* Para sincronizar hace falta saber que se borro, no solo que quedo: sin
+       esto, borrar en el celular revive al sincronizar con la tablet. */
+    borrados: {},
+    vaciadoEn: 0
   };
 }
 var db;
@@ -358,7 +364,20 @@ catch(e){ db = defaults(); }
 if(!db || !db.folders || !db.folders.length) db = defaults();
 if(!db.quota) db.quota = {date:'', count:0};
 if(!db.reproducidos) db.reproducidos = [];
-function save(){ localStorage.setItem(LS, JSON.stringify(db)); }
+if(!db.borrados) db.borrados = {};
+if(!db.vaciadoEn) db.vaciadoEn = 0;
+
+/* Una marca de borrado vieja ya no le gana a nada: se puede tirar. */
+(function podarBorrados(){
+  var limite = Date.now() - 60 * 24 * 60 * 60 * 1000, toco = false;
+  for(var k in db.borrados) if(db.borrados[k] < limite){ delete db.borrados[k]; toco = true; }
+  if(toco) localStorage.setItem(LS, JSON.stringify(db));
+})();
+function save(){
+  localStorage.setItem(LS, JSON.stringify(db));
+  /* Mientras aplicamos lo que vino de afuera no hay nada nuevo que subir. */
+  if(!aplicandoRemoto) programarSync();
+}
 
 function getKey(){ return localStorage.getItem('mytbe.key') || ''; }
 function setKey(k){ localStorage.setItem('mytbe.key', k.trim()); }
@@ -369,10 +388,19 @@ function claveValida(k){ return k.indexOf('AIza') === 0 && k.length >= 20; }
    barra apenas la guardamos, para que no quede a la vista ni en el historial. */
 function claveDelEnlace(){
   var m = /[#&]k=([^&]*)/.exec(location.hash || '');
-  if(!m) return;
+  if(!m && !/[#&]g=/.test(location.hash || '')) return;
+  if(!m) m = ['', ''];
   var k;
   try { k = decodeURIComponent(m[1]).trim(); } catch(e){ k = ''; }
   if(claveValida(k)) setKey(k);
+
+  var mg = /[#&]g=([^&]*)/.exec(location.hash || '');
+  if(mg){
+    var partes = decodeURIComponent(mg[1]).split(':');
+    if(partes.length === 2 && partes[0] && partes[1])
+      localStorage.setItem('mytbe.gist', JSON.stringify({token:partes[0], id:partes[1], ultima:0}));
+  }
+
   if(history.replaceState) history.replaceState(null, '', location.pathname + location.search);
   else location.hash = '';
 }
@@ -808,7 +836,7 @@ function askGuardar(base){
   function crearYGuardar(){
     var n = $('#nf').value.trim();
     if(!n){ $('#nf').focus(); return; }
-    var nueva = {id:'f' + Date.now(), name:n, items:[]};
+    var nueva = {id:'f' + Date.now(), name:n, items:[], creadaEn:Date.now(), nombreEn:Date.now()};
     db.folders.push(nueva);
     guardarEn(nueva);
   }
@@ -1030,7 +1058,7 @@ function askNewFolder(){
   function crear(){
     var n = $('#nf2').value.trim();
     if(!n){ $('#nf2').focus(); return; }
-    var f = {id:'f' + Date.now(), name:n, items:[]};
+    var f = {id:'f' + Date.now(), name:n, items:[], creadaEn:Date.now(), nombreEn:Date.now()};
     db.folders.push(f);
     save();
     closeModal();
@@ -1070,6 +1098,7 @@ $('#panel').addEventListener('click', function(e){
     confirmar('Eliminar', 'Se saca <b>' + esc(item.title) + '</b> de esta carpeta.', 'Eliminar',
       function(){
         fr.items = fr.items.filter(function(i){ return i.ytId !== id; });
+        db.borrados[fr.id + '|' + id] = Date.now();
         save(); render();
       });
     return;
@@ -1082,6 +1111,7 @@ $('#panel').addEventListener('click', function(e){
       'Borrar',
       function(){
         db.folders = db.folders.filter(function(x){ return x.id !== fd.id; });
+        db.borrados[fd.id] = Date.now();
         current = db.folders[0].id; modoOrden = false; save(); render();
       });
     return;
@@ -1095,7 +1125,11 @@ $('#panel').addEventListener('click', function(e){
   if((a = e.target.closest('[data-abrir]')))  { launch(db.reproducidos[+a.dataset.abrir]); return; }
   if(e.target.closest('[data-vaciar]')){
     confirmar('Vaciar recientes', 'Se borra la lista de lo que abriste. Lo guardado en carpetas no se toca.',
-      'Vaciar', function(){ db.reproducidos = []; save(); render(); });
+      'Vaciar', function(){
+        db.reproducidos = [];
+        db.vaciadoEn = Date.now();      /* para que no vuelvan al sincronizar */
+        save(); render();
+      });
     return;
   }
   if((a = e.target.closest('[data-up]')))   { mover(+a.dataset.up,   -1); return; }
@@ -1130,6 +1164,7 @@ function mover(i, paso){
   var j = i + paso;
   if(j < 0 || j >= f.items.length) return;
   var tmp = f.items[i]; f.items[i] = f.items[j]; f.items[j] = tmp;
+  f.ordenadoEn = Date.now();     /* al fusionar, manda el que ordeno ultimo */
   save(); render();
 }
 
@@ -1203,6 +1238,341 @@ $('#file').onchange = function(e){
   fr.readAsText(f);
 };
 
+
+/* ============ sincronizacion ============
+   Tres dispositivos, ningun servidor: el deposito es un gist privado de
+   GitHub y el token lo pone el usuario. Se eligio gist porque ya tenes
+   cuenta, es privado, guarda historial de versiones y la API acepta CORS.
+
+   La fusion es POR ELEMENTO, no "el ultimo que escribe gana": cada item
+   trae su addedAt y cada borrado deja una marca con su hora, asi que
+   guardar en el celular y borrar en la tablet conviven sin pisarse. */
+
+var GS = 'mytbe.gist';
+var aplicandoRemoto = false, sincronizando = false, tareaSync = null;
+
+function getGist(){
+  try { return JSON.parse(localStorage.getItem(GS)) || {}; }
+  catch(e){ return {}; }
+}
+function setGist(g){ localStorage.setItem(GS, JSON.stringify(g)); }
+function haySync(){ var g = getGist(); return !!(g.token && g.id); }
+
+/* ---- lo que viaja ---- */
+function paquete(){
+  return {
+    app:'mytbe', version:2, actualizado:Date.now(),
+    folders: db.folders,
+    borrados: db.borrados,
+    reproducidos: db.reproducidos,
+    vaciadoEn: db.vaciadoEn || 0
+  };
+}
+
+function marcasUnidas(a, b){
+  var r = {};
+  [a || {}, b || {}].forEach(function(m){
+    for(var k in m) if(!r[k] || m[k] > r[k]) r[k] = m[k];
+  });
+  return r;
+}
+
+/* Dos versiones de la misma carpeta. El orden lo pone el que ordeno mas
+   tarde; lo que el otro tenga de mas entra arriba, que es donde entra todo
+   lo nuevo en esta app. */
+function unirCarpeta(x, y){
+  var base = (y.ordenadoEn || 0) > (x.ordenadoEn || 0) ? y : x;
+  var otro = base === x ? y : x;
+
+  var porId = {}, extra = [];
+  (base.items || []).forEach(function(it){ porId[it.ytId] = it; });
+  (otro.items || []).forEach(function(it){
+    var ya = porId[it.ytId];
+    if(!ya){ porId[it.ytId] = it; extra.push(it); }
+    else if((it.addedAt || 0) > (ya.addedAt || 0)) porId[it.ytId] = it;
+  });
+  extra.sort(function(m, n){ return (n.addedAt || 0) - (m.addedAt || 0); });
+
+  return {
+    id: x.id,
+    name:       (y.nombreEn || 0) > (x.nombreEn || 0) ? y.name : x.name,
+    nombreEn:   Math.max(x.nombreEn || 0, y.nombreEn || 0),
+    creadaEn:   Math.max(x.creadaEn || 0, y.creadaEn || 0),
+    ordenadoEn: Math.max(x.ordenadoEn || 0, y.ordenadoEn || 0),
+    items: extra.concat((base.items || []).map(function(it){ return porId[it.ytId]; }))
+  };
+}
+
+function unirReproducidos(a, b, vaciadoEn){
+  var limite = Math.max(Date.now() - VIDA, vaciadoEn || 0);
+  var porId = {};
+  (a || []).concat(b || []).forEach(function(r){
+    if(!r || !r.ytId || r.cuando <= limite) return;
+    if(!porId[r.ytId] || r.cuando > porId[r.ytId].cuando) porId[r.ytId] = r;
+  });
+  var lista = [];
+  for(var k in porId) lista.push(porId[k]);
+  lista.sort(function(m, n){ return n.cuando - m.cuando; });
+  return lista.slice(0, 60);
+}
+
+function fusionar(local, remoto){
+  var borrados = marcasUnidas(local.borrados, remoto.borrados);
+  var mapa = {}, orden = [];
+
+  function tomar(lista){
+    (lista || []).forEach(function(f){
+      if(!f || !f.id) return;
+      if(!mapa[f.id]){ mapa[f.id] = f; orden.push(f.id); }
+      else mapa[f.id] = unirCarpeta(mapa[f.id], f);
+    });
+  }
+  tomar(local.folders);
+  tomar(remoto.folders);
+
+  var folders = orden
+    /* Una carpeta borrada solo se queda borrada si la marca es posterior a
+       cuando se creo: si la volviste a crear despues, gana la carpeta. */
+    .filter(function(id){
+      var t = borrados[id] || 0;
+      return !(t && t > (mapa[id].creadaEn || 0));
+    })
+    .map(function(id){
+      var f = mapa[id];
+      f.items = (f.items || []).filter(function(it){
+        var t = borrados[id + '|' + it.ytId] || 0;
+        return !(t && t > (it.addedAt || 0));
+      });
+      return f;
+    });
+
+  if(!folders.length) folders = defaults().folders;
+
+  return {
+    folders: folders,
+    borrados: borrados,
+    vaciadoEn: Math.max(local.vaciadoEn || 0, remoto.vaciadoEn || 0),
+    reproducidos: unirReproducidos(local.reproducidos, remoto.reproducidos,
+                                   Math.max(local.vaciadoEn || 0, remoto.vaciadoEn || 0))
+  };
+}
+
+/* ---- GitHub ---- */
+function pedirGist(g){
+  return fetch('https://api.github.com/gists/' + encodeURIComponent(g.id), {
+    headers: {Authorization:'Bearer ' + g.token, Accept:'application/vnd.github+json'}
+  }).then(revisar).then(function(d){
+    var f = d.files && d.files['mytbe.json'];
+    if(!f) return {};
+    /* Un archivo grande llega recortado y hay que ir a buscarlo aparte. */
+    if(f.truncated && f.raw_url) return fetch(f.raw_url).then(function(r){ return r.json(); });
+    try { return JSON.parse(f.content); } catch(e){ return {}; }
+  });
+}
+
+function subirGist(g, datos){
+  return fetch('https://api.github.com/gists/' + encodeURIComponent(g.id), {
+    method:'PATCH',
+    headers: {Authorization:'Bearer ' + g.token, Accept:'application/vnd.github+json',
+              'Content-Type':'application/json'},
+    body: JSON.stringify({files:{'mytbe.json':{content: JSON.stringify(datos, null, 1)}}})
+  }).then(revisar);
+}
+
+function crearGist(token, datos){
+  return fetch('https://api.github.com/gists', {
+    method:'POST',
+    headers: {Authorization:'Bearer ' + token, Accept:'application/vnd.github+json',
+              'Content-Type':'application/json'},
+    body: JSON.stringify({
+      description:'mytbe: carpetas y recientes', public:false,
+      files:{'mytbe.json':{content: JSON.stringify(datos, null, 1)}}
+    })
+  }).then(revisar);
+}
+
+function revisar(r){
+  if(r.ok) return r.json();
+  var e = new Error('HTTP ' + r.status);
+  e.status = r.status;
+  throw e;
+}
+
+function errorSync(err){
+  if(err.status === 401) return 'el token no sirve o vencio';
+  if(err.status === 403) return 'a ese token le falta el permiso gist';
+  if(err.status === 404) return 'ese gist ya no existe';
+  if(err.status === 422) return 'GitHub rechazo el contenido';
+  return 'no se pudo sincronizar';
+}
+
+/* ---- el ciclo ---- */
+function aplicar(unido){
+  aplicandoRemoto = true;
+  db.folders      = unido.folders;
+  db.borrados     = unido.borrados;
+  db.reproducidos = unido.reproducidos;
+  db.vaciadoEn    = unido.vaciadoEn;
+  if(!db.folders.some(function(f){ return f.id === current; }) && current !== RECIENTES)
+    current = db.folders[0].id;
+  save();
+  aplicandoRemoto = false;
+  render();
+}
+
+function estadoSync(txt, mal){
+  var e = $('#syncestado');
+  if(!e) return;
+  e.textContent = txt;
+  e.className = mal ? 'mal' : '';
+}
+
+function contarSync(){
+  var g = getGist();
+  if(!g.token || !g.id) return estadoSync('apagada');
+  if(!g.ultima) return estadoSync('conectada');
+  estadoSync('al dia, ' + hace(g.ultima));
+}
+
+function programarSync(){
+  if(!haySync()) return;
+  clearTimeout(tareaSync);
+  /* Un respiro despues del ultimo cambio: guardar tres cosas seguidas sube
+     una sola vez. */
+  tareaSync = setTimeout(function(){ sincronizar(); }, 4000);
+}
+
+function sincronizar(manual){
+  var g = getGist();
+  if(!g.token || !g.id){ if(manual) avisar('Sin conectar', 'Todavia no configuraste la sincronizacion.'); return; }
+  if(!navigator.onLine){ estadoSync('sin conexion', true); return; }
+  if(sincronizando) return;
+
+  sincronizando = true;
+  estadoSync('sincronizando...');
+
+  pedirGist(g)
+    .then(function(remoto){
+      var unido = fusionar(paquete(), remoto);
+      aplicar(unido);
+      var nuevo = paquete();
+      /* Si el gist ya dice exactamente esto, no lo escribimos de nuevo. */
+      if(JSON.stringify(remoto.folders) === JSON.stringify(nuevo.folders) &&
+         JSON.stringify(remoto.reproducidos) === JSON.stringify(nuevo.reproducidos)) return null;
+      return subirGist(g, nuevo);
+    })
+    .then(function(){
+      g.ultima = Date.now();
+      setGist(g);
+      sincronizando = false;
+      contarSync();
+    })
+    .catch(function(err){
+      sincronizando = false;
+      estadoSync(errorSync(err), true);
+      if(manual) avisar('No se pudo sincronizar', esc(errorSync(err)) + '.');
+    });
+}
+
+/* ---- el cuadro ---- */
+function askSync(){
+  var g = getGist();
+
+  if(g.token && g.id){
+    openModal(
+      '<h3>Sincronizacion</h3><div class="body">' +
+        '<p>Conectada al gist <b>' + esc(String(g.id).slice(0, 8)) + '</b>. ' +
+        'Las carpetas y los recientes se unen entre tus dispositivos, sin pisarse.</p>' +
+        '<p class="segnote" id="syncmsg">' +
+          (g.ultima ? 'Ultima vez: ' + esc(hace(g.ultima)) + '.' : 'Todavia no sincronizo.') + '</p>' +
+        '<button class="close" data-ahora>Sincronizar ahora</button>' +
+        '<button class="close" data-enlace>Copiar enlace para otro dispositivo</button>' +
+        '<button class="close peligro" data-salir>Desconectar</button>' +
+        '<button class="close" data-cancel>Cerrar</button>' +
+      '</div>',
+      function(e){
+        if(e.target.closest('[data-ahora]')){
+          $('#syncmsg').textContent = 'Sincronizando...';
+          sincronizar(true);
+          setTimeout(function(){ if($('#syncmsg')) $('#syncmsg').textContent = 'Listo.'; }, 1500);
+          return;
+        }
+        if(e.target.closest('[data-enlace]')){ enlaceCompleto(); return; }
+        if(e.target.closest('[data-salir]')){
+          closeModal();
+          confirmar('Desconectar',
+            'Este dispositivo deja de sincronizar. Lo que ya esta guardado no se toca, ' +
+            'y el gist queda en tu cuenta de GitHub.', 'Desconectar',
+            function(){ localStorage.removeItem(GS); contarSync(); });
+          return;
+        }
+        if(e.target.closest('[data-cancel]')) closeModal();
+      });
+    return;
+  }
+
+  openModal(
+    '<h3>Sincronizacion</h3><div class="body">' +
+      '<p>Guarda tus carpetas en un <b>gist privado</b> de tu cuenta de GitHub, ' +
+      'para tenerlas iguales en la tablet, la compu y el telefono.</p>' +
+      '<p class="segnote">Necesita un token clasico con el permiso <b>gist</b> y nada mas: ' +
+      'github.com/settings/tokens &rarr; Generate new token (classic) &rarr; marcar solo gist.</p>' +
+      '<input type="text" id="tokin" placeholder="ghp_..." autocomplete="off" spellcheck="false" ' +
+      'style="width:100%;margin-bottom:8px">' +
+      '<input type="text" id="gistin" placeholder="id de un gist que ya usas (opcional)" ' +
+      'autocomplete="off" spellcheck="false" style="width:100%;margin-bottom:10px">' +
+      '<p class="segnote" id="syncmsg">Si dejas el segundo campo vacio, se crea un gist nuevo.</p>' +
+      '<button class="close" data-conectar>Conectar</button>' +
+      '<button class="close" data-cancel>Cancelar</button>' +
+    '</div>',
+    function(e){
+      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+      if(!e.target.closest('[data-conectar]')) return;
+
+      var token = $('#tokin').value.trim(), id = $('#gistin').value.trim();
+      if(token.length < 20){ $('#syncmsg').textContent = 'Ese token parece incompleto.'; return; }
+      $('#syncmsg').textContent = 'Conectando...';
+
+      var listo = function(gid){
+        setGist({token:token, id:gid, ultima:Date.now()});
+        closeModal();
+        contarSync();
+        avisar('Listo', 'Sincronizacion conectada. En los otros dispositivos entra al mismo ' +
+                        'gist con el mismo token, o usa el enlace que copia este cuadro.');
+      };
+
+      if(id){
+        var g2 = {token:token, id:id};
+        pedirGist(g2).then(function(remoto){
+          aplicar(fusionar(paquete(), remoto));
+          return subirGist(g2, paquete());
+        }).then(function(){ listo(id); })
+          .catch(function(err){ $('#syncmsg').textContent = 'No anduvo: ' + errorSync(err) + '.'; });
+      } else {
+        crearGist(token, paquete())
+          .then(function(d){ listo(d.id); })
+          .catch(function(err){ $('#syncmsg').textContent = 'No anduvo: ' + errorSync(err) + '.'; });
+      }
+    });
+
+  $('#tokin').focus();
+}
+
+/* Un enlace con la clave de API y el token adentro. Es comodo y es delicado:
+   quien lo tenga entra a los gists de esa cuenta. */
+function enlaceCompleto(){
+  var g = getGist();
+  var url = location.origin + location.pathname +
+            '#k=' + encodeURIComponent(getKey()) +
+            '&g=' + encodeURIComponent(g.token + ':' + g.id);
+  var decir = function(t){ if($('#syncmsg')) $('#syncmsg').textContent = t; };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(
+      function(){ decir('Enlace copiado. Abrilo una vez en el otro dispositivo y borralo de donde lo hayas pegado.'); },
+      function(){ decir('No pude copiarlo solo.'); });
+  } else decir('Este navegador no deja copiar solo.');
+}
+
 /* ============ instalable ============
    Sin service worker, Android la agrega como acceso directo con barra de
    navegador en vez de app con icono propio. */
@@ -1220,8 +1590,13 @@ window.addEventListener('offline', estadoRed);
 $('#tabs').addEventListener('scroll', sombrasTabs);
 window.addEventListener('resize', sombrasTabs);
 
+$('#sync').onclick = askSync;
+
 aplicarTema();
 estadoRed();
+contarSync();
+/* Al abrir, traemos lo que hayan hecho los otros dispositivos. */
+if(haySync()) setTimeout(function(){ sincronizar(); }, 800);
 renderQuota();
 render();
 </script>
