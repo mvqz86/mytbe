@@ -213,6 +213,7 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .sub b{color:var(--ink-3)}
 .sub b.dura{color:var(--ink-2);font-variant-numeric:tabular-nums}
 .live{color:var(--red-text);font-weight:bold}
+.eslista{color:var(--sel);font-weight:bold}
 
 /* Antes "guardar" era un link de 11px DENTRO de la fila que dispara: el
    toque impreciso abria YouTube cuando querias guardar. Ahora tiene columna
@@ -639,11 +640,15 @@ function podarReproducidos(){
 function anotarReproducido(item){
   /* Uno solo por cosa: si lo volves a abrir sube arriba con la hora nueva. */
   db.reproducidos = db.reproducidos.filter(function(r){ return r.ytId !== item.ytId; });
-  db.reproducidos.unshift({
+  var anotado = {
     ytId: item.ytId, kind: item.kind, title: item.title || '',
     channel: item.channel || '', thumb: item.thumb || '',
     dura: item.dura || '', cuando: Date.now()
-  });
+  };
+  /* De una lista hay que guardar los ids, o desde recientes no se puede
+     volver a armar. */
+  if(item.ytIds) anotado.ytIds = item.ytIds.slice(0, TOPE_LISTA);
+  db.reproducidos.unshift(anotado);
   podarReproducidos();
   save();
 }
@@ -661,7 +666,17 @@ function hace(ts){
 
 /* ============ lanzar a YouTube ============ */
 /* Radio: el vivo actual del canal, aunque el stream se haya reiniciado. */
+var TOPE_LISTA = 50;
+
+/* YouTube arma una lista temporal al vuelo con watch_videos: contesta un
+   redirect a watch?v=<primero>&list=TLGG..., y de ahi en mas encadena el solo,
+   con su reproductor y su boton de siguiente. Sin timer, sin que mytbe tenga
+   que quedarse despierta y sin gastar cuota: es una direccion, nada mas.
+   La lista no queda guardada en la cuenta, que es justo lo que queremos. */
 function urlFor(item){
+  if(item.kind === 'playlist')
+    return 'https://www.youtube.com/watch_videos?video_ids=' +
+           (item.ytIds || []).slice(0, TOPE_LISTA).join(',');
   return item.kind === 'radio'
     ? 'https://www.youtube.com/channel/' + item.ytId + '/live'
     : 'https://www.youtube.com/watch?v=' + item.ytId;
@@ -685,8 +700,9 @@ function launch(item, anotar){
   anotarReproducido(anotar || item);
   var url = urlFor(item);
   /* En Android no se abre pestana nueva: el sistema cambia de app y mytbe
-     queda atras tal como estaba. */
-  if(esAndroid()) location.href = intentDe(url);
+     queda atras tal como estaba. Con una lista no: watch_videos es un
+     redirect que la app no necesariamente sigue, y el navegador si. */
+  if(esAndroid() && item.kind !== 'playlist') location.href = intentDe(url);
   else window.open(url, '_blank', 'noopener');
 }
 
@@ -816,8 +832,11 @@ function renderRecientes(){
         '<div class="info">' +
           '<p class="ttl">' + esc(r.title || 'Sin titulo') + '</p>' +
           '<div class="sub">' + esc(hace(r.cuando)) +
-            (r.dura ? ' &middot; <b class="dura">' + esc(r.dura) + '</b>' : '') +
-            (r.channel ? ' &middot; ' + esc(r.channel) : '') +
+            (r.kind === 'playlist'
+              ? ' &middot; <span class="eslista">&#9654; lista</span> &middot; ' +
+                plural((r.ytIds || []).length, 'video', 'videos')
+              : (r.dura ? ' &middot; <b class="dura">' + esc(r.dura) + '</b>' : '') +
+                (r.channel ? ' &middot; ' + esc(r.channel) : '')) +
             (ya ? ' &middot; <span class="saved">&#10003; en ' + esc(ya) + '</span>' : '') +
           '</div>' +
         '</div>' +
@@ -835,6 +854,39 @@ function renderRecientes(){
   $('#panel').innerHTML = html;
 }
 
+/* Los videos que se ven ahora mismo, en el orden en que se ven: primero los
+   de cada carpeta y al final los sueltos. Las radios quedan afuera (son
+   canales, no tienen un id de video estable) y las listas tambien. */
+function videosVisibles(f){
+  var buscado = pelar(filtro.trim()), filtrando = !!buscado;
+  function sirve(it){
+    if(it.kind !== 'video') return false;
+    if(!filtrando) return true;
+    return pelar(it.title).indexOf(buscado) > -1 || pelar(it.channel || '').indexOf(buscado) > -1;
+  }
+  var salida = [];
+  (function recorrer(padre){
+    hijasDe(padre).forEach(function(h){
+      salida = salida.concat(h.items.filter(sirve));
+      recorrer(h.id);
+    });
+  })(f.id);
+  return salida.concat(f.items.filter(sirve));
+}
+
+function reproducirLista(items, nombre){
+  if(!items.length) return;
+  if(items.length > TOPE_LISTA){
+    avisar('Son muchos', 'YouTube aguanta unos <b>' + TOPE_LISTA + '</b> por lista. ' +
+           'Van los primeros ' + TOPE_LISTA + ', en el orden que se ven.');
+  }
+  launch({
+    kind:'playlist', ytId:'tmp' + Date.now(), title:nombre,
+    ytIds: items.slice(0, TOPE_LISTA).map(function(i){ return i.ytId; }),
+    thumb: items[0].thumb || '', channel:''
+  });
+}
+
 /* Lo que se guardo antes de que existiera la duracion no la tiene. Se
    completa sola: videos.list cuesta 1 unidad para 50 juntos, y a los que la
    API no conteste se les anota vacio para no volver a preguntar por ellos. */
@@ -846,7 +898,7 @@ function completarDuras(){
   var faltan = [];
   db.folders.forEach(function(f){
     f.items.forEach(function(it){
-      if(it.kind !== 'radio' && it.dura === undefined && faltan.length < 50) faltan.push(it);
+      if(it.kind === 'video' && it.dura === undefined && faltan.length < 50) faltan.push(it);
     });
   });
   if(!faltan.length) return;
@@ -906,7 +958,10 @@ function renderFolder(){
         '<div class="sub">' +
           (it.kind === 'radio'
             ? '<span class="live">en vivo</span>'
-            : (it.dura ? '<b class="dura">' + esc(it.dura) + '</b> &middot; ' : '') + esc(it.channel)) +
+            : it.kind === 'playlist'
+              ? '<span class="eslista">&#9654; lista</span> &middot; ' +
+                plural((it.ytIds || []).length, 'video', 'videos')
+              : (it.dura ? '<b class="dura">' + esc(it.dura) + '</b> &middot; ' : '') + esc(it.channel)) +
         '</div>' +
       '</div>' +
       (modoOrden
@@ -944,6 +999,9 @@ function renderFolder(){
       '<span class="n">' + items.length + '</span>' +
       /* Crear un nivel mas abajo sin salir de aca. En el grupo de los sueltos
          no va: ese no es una carpeta, es el resto. */
+      (items.filter(function(i){ return i.kind === 'video'; }).length
+        ? '<button class="masg" data-play2="' + esc(carpeta.id) + '" title="Reproducir ' +
+          esc(carpeta.name) + ' entera">&#9654;</button>' : '') +
       (propio ? '' : '<button class="masg" data-dentro2="' + esc(carpeta.id) + '" title="' +
         esc(tipoHijaDe(carpeta.id)) + ' nueva adentro de ' + esc(carpeta.name) + '">+</button>') +
     '</div>';
@@ -981,9 +1039,17 @@ function renderFolder(){
     html += 'Move cada uno con las flechas &middot; <a data-orden>listo</a>';
   } else if(filtrando){
     html += plural(mostrados, 'elemento', 'elementos') + ' con ese texto';
+    if(videosVisibles(f).length > 1){
+      html += ' &middot; <a data-playtodo>&#9654; reproducir</a>' +
+              ' &middot; <a data-comolista>guardar como lista</a>';
+    }
   } else {
     html += plural(total, 'elemento', 'elementos');
     if(hijas.length) html += ' en ' + plural(grupos, 'grupo', 'grupos');
+    if(videosVisibles(f).length > 1){
+      html += ' &middot; <a data-playtodo>&#9654; reproducir</a>' +
+              ' &middot; <a data-comolista>guardar como lista</a>';
+    }
     html += ' &middot; <a data-nuevasub>' + esc(tipoHijaDe(f.id)) + ' nueva</a>';
     if(total > 1)             html += ' &middot; <a data-orden>ordenar</a>';
     if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar ' + esc(tipoDe(f)) + '</a>';
@@ -1183,7 +1249,7 @@ function deReciente(r){
 function askGuardar(base){
   /* Para una radio conviene guardar el CANAL: el ID del video muere cada vez
      que la transmision se reinicia, el canal no. */
-  var kind = base.live ? 'radio' : 'video';
+  var kind = base.lista ? 'playlist' : (base.live ? 'radio' : 'video');
   /* La eleccion solo tiene sentido si tenemos las dos cosas; desde recientes
      ya viene resuelta. */
   var elegible = base.live && base.videoId && base.channelId;
@@ -1251,6 +1317,18 @@ function askGuardar(base){
   }
 
   function guardarEn(folder){
+    if(kind === 'playlist'){
+      var nombre = ($('#plname') && $('#plname').value.trim()) || base.title || 'Lista';
+      folder.items.unshift({
+        kind:'playlist', ytId:'pl' + Date.now(), title:nombre,
+        ytIds: base.ytIds.slice(0, TOPE_LISTA), channel:'', thumb: base.thumb || '',
+        dura:'', addedAt: Date.now()
+      });
+      save();
+      closeModal();
+      render();
+      return;
+    }
     var ytId = kind === 'radio' ? base.channelId : base.videoId;
     if(folder.items.some(function(x){ return x.ytId === ytId; })){
       closeModal();
@@ -1284,7 +1362,13 @@ function askGuardar(base){
 
   openModal(
     '<h3>Guardar</h3><div class="body">' +
-      '<p class="what">' + esc(String(base.title).slice(0,90)) + '</p>' +
+      (base.lista
+        /* A una lista hay que ponerle nombre: no lo trae de ningun lado. */
+        ? '<p class="segnote">Lista de <b>' + base.ytIds.length + ' videos</b>, en el orden ' +
+          'en que se ven. Como se llama?</p>' +
+          '<input type="text" id="plname" maxlength="40" autocomplete="off" ' +
+          'style="width:100%;margin-bottom:10px" value="' + esc(base.title) + '">'
+        : '<p class="what">' + esc(String(base.title).slice(0,90)) + '</p>') +
       (elegible ?
         '<div class="seg" id="seg">' +
           '<button data-kind="radio" class="on">la radio</button>' +
@@ -1564,6 +1648,28 @@ $('#panel').addEventListener('click', function(e){
 
   /* Ordenar y traer mas van antes del disparo: viven dentro de la fila y
      closest() las taparia. */
+  if((a = e.target.closest('[data-play2]'))){
+    var cg = carpetaPorId(a.dataset.play2);
+    reproducirLista(cg.items.filter(function(i){ return i.kind === 'video'; }), cg.name);
+    return;
+  }
+  if(e.target.closest('[data-playtodo]')){
+    var ft = carpetaPorId(current);
+    reproducirLista(videosVisibles(ft), ft.name + (filtro.trim() ? ' ' + filtro.trim() : ''));
+    return;
+  }
+  if(e.target.closest('[data-comolista]')){
+    var fl = carpetaPorId(current);
+    var vs = videosVisibles(fl).slice(0, TOPE_LISTA);
+    askGuardar({
+      lista: true,
+      ytIds: vs.map(function(i){ return i.ytId; }),
+      title: fl.name + (filtro.trim() ? ' ' + filtro.trim() : ''),
+      channel: '',
+      thumb: vs[0] ? vs[0].thumb : ''
+    });
+    return;
+  }
   if((a = e.target.closest('[data-dentro2]'))){ askNewFolder(a.dataset.dentro2); return; }
   if((a = e.target.closest('[data-grupo]'))){
     var fg = carpetaPorId(current);

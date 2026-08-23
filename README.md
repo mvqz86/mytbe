@@ -31,6 +31,28 @@ la devuelve como `P0D`, que no es un largo sino "esto todavia no termino".
 Los titulos de la API vienen escapados como HTML (`&quot;`, `&amp;`), asi que
 se desarman antes de mostrarlos y antes de guardarlos.
 
+## Modo lista
+
+YouTube arma una lista temporal al vuelo con `watch_videos?video_ids=A,B,C`:
+contesta un redirect a `watch?v=A&list=TLGG...` y de ahi en mas encadena solo,
+con su propio reproductor. No hace falta ningun temporizador —una pagina en
+segundo plano no puede abrir otra app ni tiene timers confiables— ni gasta
+cuota: es una direccion.
+
+- **▶** en el encabezado de una carpeta reproduce esa carpeta entera.
+- **▶ reproducir**, en el pie, reproduce todo lo que se ve, en ese orden. Con
+  el filtro puesto, reproduce lo filtrado: se arma una lista escribiendo tres
+  letras.
+- **guardar como lista** guarda eso mismo como un item, con nombre propio, en
+  la solapa o carpeta que elijas. Despues se toca y suena todo seguido.
+
+Las radios quedan afuera: son canales y no tienen un id de video estable. El
+tope es de unos 50 por lista; si hay mas, van los primeros 50 y se avisa. La
+lista no queda guardada en la cuenta de YouTube.
+
+En Android, una lista se abre en el navegador en vez de la app: watch_videos
+es un redirect que el navegador sigue siempre y la app no necesariamente.
+
 ## Radios
 
 Una radio se guarda como **canal**, no como video: el ID de un stream
