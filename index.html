@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#dfe6ec">
+<title>mytbe</title>
+<style>
+/* ===========================================================
+   Estetica YouTube 2005: Arial chica, cajas plateadas con
+   biselado, links azules subrayados, barra celeste de formulario.
+   =========================================================== */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:#dfe6ec;
+  font:13px/1.4 Arial,Helvetica,sans-serif;
+  color:#000;
+  padding:8px 8px 24px;
+}
+a{color:#0000cc;text-decoration:underline;cursor:pointer}
+a:visited{color:#551a8b}
+
+.shell{max-width:680px;margin:0 auto}
+
+/* ---- encabezado ---- */
+.top{display:flex;align-items:flex-end;gap:10px;padding:2px 4px 6px}
+.logo{font:italic 900 27px/0.9 Arial,Helvetica,sans-serif;letter-spacing:-1px;white-space:nowrap}
+.logo .a{color:#1b1b1b}
+.logo .b{
+  color:#fff;background:#cc181e;border-radius:7px;
+  padding:2px 6px 3px;margin-left:2px;display:inline-block
+}
+.topright{margin-left:auto;text-align:right;font-size:11px;color:#555;line-height:1.5}
+.topright a{font-size:11px}
+
+/* ---- pestanas ---- */
+.tabs{display:flex;gap:2px;overflow-x:auto;white-space:nowrap;
+  padding:0 2px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  font:bold 11px/1 Arial,Helvetica,sans-serif;letter-spacing:.08em;
+  color:#4d4d4d;background:linear-gradient(#fcfcfc,#cfcfcf);
+  border:1px solid #9a9a9a;border-bottom:none;border-radius:6px 6px 0 0;
+  padding:15px 14px 14px;cursor:pointer;flex:none;text-transform:uppercase
+}
+.tab.on{background:#fff;color:#000;padding-bottom:15px;position:relative;z-index:2}
+.tab.add{font-size:15px;letter-spacing:0;padding:13px 14px 12px;color:#666}
+
+/* ---- barra celeste ---- */
+.bluebar{
+  background:#c6d9ef;border:1px solid #9a9a9a;border-radius:0 6px 0 0;
+  padding:10px 12px;margin-top:-1px;position:relative;z-index:1
+}
+.row1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.row1 label{font-weight:bold;font-size:12px}
+input[type=text]{
+  flex:1;min-width:120px;background:#fff;border:1px solid #7f9db9;
+  padding:6px 5px;font:16px Arial,Helvetica,sans-serif;color:#000;border-radius:0
+}
+input[type=text]:focus{outline:1px solid #4a76a8}
+button{
+  font:bold 12px Arial,Helvetica,sans-serif;color:#1b1b1b;
+  background:linear-gradient(#fdfdfd,#dcdcdc);border:1px solid #8c8c8c;
+  border-radius:3px;padding:11px 14px;cursor:pointer
+}
+button:active{background:linear-gradient(#d0d0d0,#e8e8e8)}
+.row2{margin-top:8px;font-size:12px;text-align:center;line-height:2}
+select{
+  font:12px Arial,Helvetica,sans-serif;background:#fff;border:1px solid #7f9db9;
+  padding:3px 2px;margin:0 3px;border-radius:0;max-width:46vw
+}
+
+/* ---- panel blanco ---- */
+.panel{
+  background:#fff;border:1px solid #9a9a9a;border-top:none;
+  border-radius:0 0 12px 12px;padding:14px 12px;min-height:220px
+}
+.crumb{font-size:11px;color:#555;margin:-4px 0 12px}
+
+/* ---- filas de contenido ----
+   La fila entera dispara. El texto conserva el aspecto de link chico de 2005,
+   pero el area tactil es toda la fila: se usa a oscuras y con una mano. */
+.row{display:flex;gap:10px;padding:11px 4px;margin:0 -4px;
+  border-bottom:1px solid #e2e2e2;align-items:flex-start;cursor:pointer}
+.row:last-of-type{border-bottom:none}
+.row:active{background:#eaf1fa}
+.th{width:96px;height:72px;flex:none;border:1px solid #999;background:#ececec;object-fit:cover}
+.info{flex:1;min-width:0}
+.ttl{font-size:13px;font-weight:bold;line-height:1.25;margin:0 0 3px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sub{font-size:11px;color:#666;line-height:1.6}
+.sub b{color:#333}
+.live{color:#cc181e;font-weight:bold}
+/* Deliberadamente chicos: son las acciones secundarias y una es destructiva,
+   asi que no compiten con el area de disparo. "eliminar" ademas pide confirmar. */
+.acts{margin-top:5px;font-size:11px}
+.acts a{margin-right:12px;padding:3px 0;display:inline-block}
+
+.empty{color:#777;font-size:12px;text-align:center;padding:46px 14px;line-height:1.7}
+.foot{margin-top:14px;padding-top:10px;border-top:1px solid #e2e2e2;font-size:11px;color:#777}
+.loading{text-align:center;padding:44px;color:#777;font-size:12px}
+
+/* ---- modal ---- */
+.modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:center;padding:16px}
+.modal[hidden]{display:none}
+.box{background:#fff;border:1px solid #7a7a7a;max-width:380px;width:100%;
+  box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.box h3{margin:0;font-size:12px;font-weight:bold;color:#fff;letter-spacing:.04em;
+  background:linear-gradient(#5b87b8,#3d6a9c);padding:8px 11px;text-transform:uppercase}
+.box .body{padding:13px}
+.box p{margin:0 0 11px;font-size:12px;color:#333;line-height:1.5}
+.pick{display:block;width:100%;text-align:left;margin-bottom:6px;padding:9px 10px;
+  font:12px Arial,Helvetica,sans-serif;font-weight:normal}
+.pick b{display:block;font-size:12px;margin-bottom:2px}
+.pick small{color:#666;font-size:11px;line-height:1.4;display:block}
+.pick.sel{border:2px solid #cc181e;background:#fff8f8}
+.hint{font-size:11px;color:#666;margin:10px 0 6px;font-weight:bold}
+.box .close{width:100%;margin-top:4px}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <div class="top">
+    <div class="logo"><span class="a">my</span><span class="b">tbe</span></div>
+    <div class="topright">
+      <span id="quota">0/100 hoy</span><br>
+      <a id="keylink">clave</a>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="bluebar">
+    <div class="row1">
+      <label for="q">Buscar:</label>
+      <input type="text" id="q" autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <button id="go">Buscar</button>
+    </div>
+    <div class="row2">
+      Quiero
+      <select id="f-live">
+        <option value="">cualquier video</option>
+        <option value="live">solo en vivo</option>
+      </select>
+      que dure
+      <select id="f-long">
+        <option value="">lo que sea</option>
+        <option value="long">mas de 20 min</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="panel" id="panel"></div>
+
+</div>
+
+<div class="modal" id="modal" hidden><div class="box" id="box"></div></div>
+
+<script>
+/* ============ almacenamiento ============ */
+var LS = 'mytbe.v1';
+/* La app se llamaba "disparador" durante el desarrollo: si quedo algo
+   guardado con las claves viejas, lo pasamos una sola vez y las borramos. */
+(function migrar(){
+  if(localStorage.getItem(LS)) return;
+  var viejo = localStorage.getItem('disparador.v1');
+  if(viejo){ localStorage.setItem(LS, viejo); localStorage.removeItem('disparador.v1'); }
+  var k = localStorage.getItem('disparador.key');
+  if(k && !localStorage.getItem('mytbe.key')){
+    localStorage.setItem('mytbe.key', k); localStorage.removeItem('disparador.key');
+  }
+})();
+function defaults(){
+  return {
+    folders: [
+      {id:'radios',       name:'Radios',       items:[]},
+      {id:'documentales', name:'Documentales', items:[]},
+      {id:'verdespues',   name:'Ver despues',  items:[]}
+    ],
+    quota: {date:'', count:0}
+  };
+}
+var db;
+try { db = JSON.parse(localStorage.getItem(LS)) || defaults(); }
+catch(e){ db = defaults(); }
+if(!db || !db.folders || !db.folders.length) db = defaults();
+if(!db.quota) db.quota = {date:'', count:0};
+function save(){ localStorage.setItem(LS, JSON.stringify(db)); }
+
+function getKey(){ return localStorage.getItem('mytbe.key') || ''; }
+function setKey(k){ localStorage.setItem('mytbe.key', k.trim()); }
+
+/* ============ utilidades ============ */
+function $(s){ return document.querySelector(s); }
+function esc(s){
+  return String(s).replace(/[&<>"]/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+  });
+}
+function today(){ return new Date().toISOString().slice(0,10); }
+function renderQuota(){
+  var n = db.quota.date === today() ? db.quota.count : 0;
+  $('#quota').textContent = n + '/100 hoy';
+}
+function bumpQuota(){
+  if(db.quota.date !== today()) db.quota = {date:today(), count:0};
+  db.quota.count++; save(); renderQuota();
+}
+
+/* Las miniaturas de un vivo mueren con la transmision. */
+var PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='96' height='72'>" +
+  "<rect width='96' height='72' fill='#ececec'/>" +
+  "<circle cx='48' cy='36' r='11' fill='none' stroke='#9a9a9a' stroke-width='2'/>" +
+  "<circle cx='48' cy='36' r='3' fill='#9a9a9a'/></svg>");
+function imgFallback(el){ el.onerror = null; el.src = PLACEHOLDER; }
+
+/* Para una radio guardamos el avatar del canal: el logo de la emisora es
+   estable, la miniatura del stream no. channels.list cuesta 1 unidad. */
+function fetchChannelAvatar(channelId){
+  return fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&id=' +
+               encodeURIComponent(channelId) + '&key=' + encodeURIComponent(getKey()))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var it = d.items && d.items[0];
+      var t = it && it.snippet && it.snippet.thumbnails;
+      var pick = t && (t.medium || t['default'] || t.high);
+      return pick ? pick.url : null;
+    })
+    .catch(function(){ return null; });
+}
+
+/* ============ lanzar a YouTube ============ */
+/* Radio: el vivo actual del canal, aunque el stream se haya reiniciado. */
+function urlFor(item){
+  return item.kind === 'radio'
+    ? 'https://www.youtube.com/channel/' + item.ytId + '/live'
+    : 'https://www.youtube.com/watch?v=' + item.ytId;
+}
+function launch(item){
+  window.open(urlFor(item), '_blank', 'noopener');
+}
+
+/* ============ estado de vista ============ */
+var current = db.folders[0].id;   /* carpeta abierta */
+var results = null;               /* si hay busqueda activa */
+
+function renderTabs(){
+  $('#tabs').innerHTML = db.folders.map(function(f){
+    return '<button class="tab' + (!results && f.id === current ? ' on' : '') +
+           '" data-tab="' + esc(f.id) + '">' + esc(f.name) + '</button>';
+  }).join('') + '<button class="tab add" data-newfolder title="Nueva carpeta">+</button>';
+}
+
+function render(){
+  renderTabs();
+  results ? renderResults() : renderFolder();
+}
+
+/* ---- carpeta ---- */
+function renderFolder(){
+  var f = db.folders.filter(function(x){ return x.id === current; })[0] || db.folders[0];
+  current = f.id;
+  var html = '';
+
+  if(!f.items.length){
+    html = '<div class="empty">Esta carpeta esta vacia.<br>' +
+           'Busca algo arriba y toca <b>guardar</b> en el resultado.</div>';
+  } else {
+    html = f.items.map(function(it){
+      return '<div class="row" data-open="' + esc(it.ytId) + '">' +
+        '<img class="th" src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
+        '<div class="info">' +
+          '<p class="ttl"><a>' + esc(it.title) + '</a></p>' +
+          '<div class="sub">' +
+            (it.kind === 'radio'
+              ? '<span class="live">radio en vivo</span> &middot; abre lo que este al aire'
+              : 'de <b>' + esc(it.channel) + '</b>') +
+          '</div>' +
+          '<div class="acts"><a data-rm="' + esc(it.ytId) + '">eliminar</a></div>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  html += '<div class="foot">' + f.items.length + ' en esta carpeta';
+  if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar carpeta</a>';
+  html += '</div>';
+
+  $('#panel').innerHTML = html;
+}
+
+/* ---- resultados ---- */
+function renderResults(){
+  var f = db.folders.filter(function(x){ return x.id === current; })[0];
+  var html = '<div class="crumb">Resultados de <b>' + esc(results.q) + '</b> &middot; ' +
+             '<a data-back>volver a ' + esc(f.name) + '</a></div>';
+
+  html += results.items.map(function(it, i){
+    var s = it.snippet, live = s.liveBroadcastContent === 'live';
+    var th = (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || PLACEHOLDER;
+    return '<div class="row" data-play="' + i + '">' +
+      '<img class="th" src="' + esc(th) + '" alt="" onerror="imgFallback(this)">' +
+      '<div class="info">' +
+        '<p class="ttl"><a>' + esc(s.title) + '</a></p>' +
+        '<div class="sub">' + (live ? '<span class="live">EN VIVO</span> &middot; ' : '') +
+          'de <b>' + esc(s.channelTitle) + '</b></div>' +
+        '<div class="acts"><a data-save="' + i + '">guardar</a></div>' +
+      '</div></div>';
+  }).join('');
+
+  $('#panel').innerHTML = html;
+}
+
+/* ============ busqueda ============ */
+function doSearch(){
+  var q = $('#q').value.trim();
+  if(!q) return;
+  if(!getKey()){ askKey(); return; }
+
+  $('#panel').innerHTML = '<div class="loading">Buscando&hellip;</div>';
+
+  var liveOnly = $('#f-live').value === 'live';
+  var p = new URLSearchParams({key:getKey(), part:'snippet', q:q, type:'video', maxResults:'25'});
+  if(liveOnly) p.set('eventType','live');
+  if($('#f-long').value === 'long') p.set('videoDuration','long');
+
+  fetch('https://www.googleapis.com/youtube/v3/search?' + p.toString())
+    .then(function(r){
+      return r.json().then(function(d){
+        if(!r.ok) throw new Error((d.error && d.error.message) || ('HTTP ' + r.status));
+        return d;
+      });
+    })
+    .then(function(data){
+      bumpQuota();
+      /* La API cuela resultados de canal aunque pidamos type=video, y en modo
+         vivo devuelve transmisiones ya terminadas. Filtramos los dos casos. */
+      var items = (data.items || [])
+        .filter(function(it){ return it.id && it.id.videoId; })
+        .filter(function(it){
+          return !liveOnly || (it.snippet && it.snippet.liveBroadcastContent === 'live');
+        });
+
+      if(!items.length){
+        results = null; render();
+        $('#panel').innerHTML = '<div class="empty">Sin resultados para <b>' + esc(q) + '</b>.' +
+          (liveOnly ? '<br>Puede que no haya nadie transmitiendo ahora.' : '') + '</div>';
+        return;
+      }
+      results = {q:q, items:items};
+      render();
+      window.scrollTo(0,0);
+    })
+    .catch(function(err){
+      $('#panel').innerHTML = '<div class="empty">No se pudo buscar.<br><br>' +
+                              esc(err.message) + '</div>';
+    });
+}
+
+/* ============ guardar ============ */
+function askSave(idx){
+  var it = results.items[idx], s = it.snippet;
+  var live = s.liveBroadcastContent === 'live';
+  /* Para una radio conviene guardar el CANAL: el ID del video muere cada vez
+     que la transmision se reinicia, el canal no. */
+  var kind = live ? 'radio' : 'video';
+
+  function body(){
+    return '<h3>Guardar</h3><div class="body">' +
+      '<p>' + esc(s.title.slice(0,90)) + '</p>' +
+      (live ?
+        '<button class="pick ' + (kind==='radio'?'sel':'') + '" data-kind="radio">' +
+          '<b>Guardar la radio</b><small>Sigue al canal. Abre lo que este al aire, siempre.</small></button>' +
+        '<button class="pick ' + (kind==='video'?'sel':'') + '" data-kind="video">' +
+          '<b>Guardar este stream</b><small>Solo esta transmision. Muere cuando termine.</small></button>' +
+        '<div class="hint">En que carpeta?</div>'
+        : '<div class="hint">En que carpeta?</div>') +
+      db.folders.map(function(f){
+        return '<button class="pick" data-folder="' + esc(f.id) + '">' + esc(f.name) + '</button>';
+      }).join('') +
+      '<button class="close" data-cancel>Cancelar</button></div>';
+  }
+
+  openModal(body(), function(el){
+    el.addEventListener('click', function(e){
+      var k = e.target.closest('[data-kind]');
+      if(k){ kind = k.dataset.kind; el.innerHTML = body(); return; }
+      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+      var fb = e.target.closest('[data-folder]');
+      if(!fb) return;
+
+      var folder = db.folders.filter(function(x){ return x.id === fb.dataset.folder; })[0];
+      var ytId = kind === 'radio' ? s.channelId : it.id.videoId;
+      if(folder.items.some(function(x){ return x.ytId === ytId; })){
+        closeModal(); alert('Ya estaba en ' + folder.name); return;
+      }
+      var nuevo = {
+        kind: kind,
+        ytId: ytId,
+        title:   kind === 'radio' ? s.channelTitle : s.title,
+        channel: s.channelTitle,
+        thumb:   (s.thumbnails && s.thumbnails.medium && s.thumbnails.medium.url) || '',
+        addedAt: Date.now()
+      };
+      folder.items.unshift(nuevo);
+      save(); closeModal();
+      current = folder.id; results = null; render();
+
+      if(kind === 'radio'){
+        fetchChannelAvatar(ytId).then(function(url){
+          if(!url) return;
+          nuevo.thumb = url; save(); if(!results) render();
+        });
+      }
+    });
+  });
+}
+
+/* ============ modal ============ */
+function openModal(html, wire){
+  var box = $('#box');
+  box.innerHTML = html; $('#modal').hidden = false;
+  if(wire) wire(box);
+}
+function closeModal(){ $('#modal').hidden = true; }
+$('#modal').addEventListener('click', function(e){ if(e.target.id === 'modal') closeModal(); });
+
+function askKey(){
+  openModal(
+    '<h3>Clave de API</h3><div class="body">' +
+    '<p>Pega tu clave de YouTube Data API v3. Queda guardada solo en este navegador.</p>' +
+    '<input type="text" id="keyin" placeholder="AIza..." autocomplete="off" spellcheck="false" ' +
+    'style="width:100%;margin-bottom:10px" value="' + esc(getKey()) + '">' +
+    '<button class="close" id="keysave">Guardar</button>' +
+    '<button class="close" data-cancel>Cancelar</button></div>',
+    function(el){
+      el.querySelector('#keysave').onclick = function(){
+        var v = el.querySelector('#keyin').value.trim();
+        if(v.indexOf('AIza') !== 0){ alert('Esa clave no parece valida.'); return; }
+        setKey(v); closeModal();
+        if($('#q').value.trim()) doSearch();
+      };
+      el.querySelector('[data-cancel]').onclick = closeModal;
+    });
+}
+
+/* ============ eventos ============ */
+$('#go').onclick = doSearch;
+$('#q').addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.target.blur(); doSearch(); }
+});
+$('#keylink').onclick = askKey;
+
+$('#tabs').addEventListener('click', function(e){
+  var t = e.target.closest('[data-tab]');
+  if(t){ current = t.dataset.tab; results = null; render(); return; }
+  if(e.target.closest('[data-newfolder]')){
+    var n = prompt('Nombre de la carpeta nueva:');
+    if(!n || !n.trim()) return;
+    var f = {id:'f' + Date.now(), name:n.trim(), items:[]};
+    db.folders.push(f); save(); current = f.id; results = null; render();
+  }
+});
+
+/* Ojo con el orden: la fila entera es el area de disparo, asi que las acciones
+   que viven dentro de ella se evaluan primero o quedarian tapadas por closest(). */
+$('#panel').addEventListener('click', function(e){
+  var a;
+
+  if((a = e.target.closest('[data-save]'))){ askSave(+a.dataset.save); return; }
+  if((a = e.target.closest('[data-back]'))){ results = null; render(); return; }
+  if((a = e.target.closest('[data-rm]'))){
+    var fr = db.folders.filter(function(x){ return x.id === current; })[0];
+    var item = fr.items.filter(function(i){ return i.ytId === a.dataset.rm; })[0];
+    if(!confirm('Eliminar "' + item.title + '"?')) return;
+    fr.items = fr.items.filter(function(i){ return i.ytId !== a.dataset.rm; });
+    save(); render(); return;
+  }
+  if(e.target.closest('[data-delfolder]')){
+    var fd = db.folders.filter(function(x){ return x.id === current; })[0];
+    if(!confirm('Borrar la carpeta "' + fd.name + '"' +
+                (fd.items.length ? ' y sus ' + fd.items.length + ' elementos' : '') + '?')) return;
+    db.folders = db.folders.filter(function(x){ return x.id !== fd.id; });
+    current = db.folders[0].id; save(); render();
+    return;
+  }
+
+  /* Recien ahora: el disparo, que ocupa toda la fila. */
+  if((a = e.target.closest('[data-play]'))){
+    launch({kind:'video', ytId: results.items[a.dataset.play].id.videoId}); return;
+  }
+  if((a = e.target.closest('[data-open]'))){
+    var fo = db.folders.filter(function(x){ return x.id === current; })[0];
+    launch(fo.items.filter(function(i){ return i.ytId === a.dataset.open; })[0]);
+  }
+});
+
+renderQuota();
+render();
+</script>
+</body>
+</html>
