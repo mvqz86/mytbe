@@ -1522,7 +1522,7 @@ function askSync(){
       'github.com/settings/tokens &rarr; Generate new token (classic) &rarr; marcar solo gist.</p>' +
       '<input type="text" id="tokin" placeholder="ghp_..." autocomplete="off" spellcheck="false" ' +
       'style="width:100%;margin-bottom:8px">' +
-      '<input type="text" id="gistin" placeholder="id de un gist que ya usas (opcional)" ' +
+      '<input type="text" id="gistin" placeholder="dejalo vacio la primera vez" ' +
       'autocomplete="off" spellcheck="false" style="width:100%;margin-bottom:10px">' +
       '<p class="segnote" id="syncmsg">Si dejas el segundo campo vacio, se crea un gist nuevo.</p>' +
       '<button class="close" data-conectar>Conectar</button>' +
@@ -1550,7 +1550,12 @@ function askSync(){
           aplicar(fusionar(paquete(), remoto));
           return subirGist(g2, paquete());
         }).then(function(){ listo(id); })
-          .catch(function(err){ $('#syncmsg').textContent = 'No anduvo: ' + errorSync(err) + '.'; });
+          .catch(function(err){
+            /* Casi siempre el 404 es que en ese campo se escribio otra cosa. */
+            $('#syncmsg').textContent = err.status === 404
+              ? 'No hay ningun gist con ese id. Si es la primera vez, vacia el campo y lo creo yo.'
+              : 'No anduvo: ' + errorSync(err) + '.';
+          });
       } else {
         crearGist(token, paquete())
           .then(function(d){ listo(d.id); })
