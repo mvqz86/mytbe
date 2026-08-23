@@ -324,6 +324,24 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .pick b{display:block;font-size:12px;margin-bottom:2px}
 .pick.sel{border:2px solid var(--red);background:var(--sel-bg)}
 .pick small{display:block;color:var(--ink-3);font-size:10.5px;margin-top:2px}
+/* ---- arbol del cuadro de guardar ----
+   Una fila por carpeta: el triangulo abre, el nombre guarda, el + crea una
+   adentro. Tres blancos distintos en la misma linea, cada uno de 34 de alto
+   para que no se pisen con el pulgar. */
+.rama{display:flex;align-items:center;gap:4px;margin-bottom:5px}
+.rama .tri{width:30px;height:34px;flex:none;padding:0;border:none;background:none;
+  color:var(--ink-3);font-size:9px;border-radius:3px}
+.rama .tri:active{background:var(--x-hit)}
+.rama .hueco3{width:30px;flex:none}
+.pick.arbol{flex:1;min-width:0;margin:0;display:flex;align-items:center;gap:8px;
+  padding:9px 10px;text-align:left}
+.pick.arbol span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick.arbol small{display:inline;margin:0 0 0 auto;flex:none}
+.rama .mas{width:34px;height:34px;flex:none;padding:0;border-radius:3px;
+  font:bold 16px Arial,Helvetica,sans-serif;color:var(--btn-ink)}
+.dentrode{font-size:11px;color:var(--ink-2);margin:0 0 6px}
+.dentrode b{color:var(--ink)}
+
 .pick.nueva,.pick.volver{text-align:center;color:var(--link);background:var(--panel)}
 .pick.nueva{border-style:dashed}
 .hint{font-size:11px;color:var(--ink-2);margin:14px 0 4px;font-weight:bold;
@@ -1070,6 +1088,10 @@ function doSearch(token){
     });
 }
 
+/* Que ramas quedaron abiertas en el cuadro de guardar. Fuera de la funcion
+   para que sobreviva entre un guardado y el siguiente. */
+var abiertosGuardar = {};
+
 /* ============ guardar ============
    El cuadro es el mismo venga de una busqueda o de recientes, asi que recibe
    una forma neutra en vez del snippet crudo de la API. */
@@ -1111,23 +1133,40 @@ function askGuardar(base){
 
   function listaCarpetas(){
     var html = '';
-    /* Sangradas, para que se vea de quien cuelga cada una. */
     (function nivel(padre, prof){
       hijasDe(padre).forEach(function(f){
-        html += '<button class="pick" data-folder="' + esc(f.id) + '"' +
-                (prof ? ' style="padding-left:' + (10 + prof * 15) + 'px"' : '') + '>' +
-                (prof ? '&rsaquo; ' : '') + esc(f.name) +
-                '<small>' + plural(f.items.length, 'elemento', 'elementos') + '</small></button>';
-        nivel(f.id, prof + 1);
+        var hijas = hijasDe(f.id);
+        /* Abiertas salvo que las hayan cerrado: al abrir el cuadro se ve la
+           forma entera de la coleccion. */
+        var abierta = abiertosGuardar[f.id] !== false;
+        html +=
+          '<div class="rama"' + (prof ? ' style="margin-left:' + (prof * 16) + 'px"' : '') + '>' +
+            (hijas.length
+              ? '<button class="tri" data-abrir="' + esc(f.id) + '" title="' +
+                (abierta ? 'Cerrar' : 'Abrir') + '">' + (abierta ? '&#9660;' : '&#9654;') + '</button>'
+              : '<span class="hueco3"></span>') +
+            '<button class="pick arbol" data-folder="' + esc(f.id) + '"><span>' + esc(f.name) +
+              '</span><small>' + f.items.length + '</small></button>' +
+            '<button class="mas" data-dentro="' + esc(f.id) + '" title="Subcarpeta nueva adentro de ' +
+              esc(f.name) + '">+</button>' +
+          '</div>';
+        if(hijas.length && abierta) nivel(f.id, prof + 1);
       });
     })(null, 0);
     return html + '<button class="pick nueva" data-nueva>+ carpeta nueva</button>';
   }
 
-  function panelNueva(){
+  var nuevoPadre = null;
+
+  function panelNueva(padre){
+    nuevoPadre = padre || null;
+    var madre = padre ? carpetaPorId(padre) : null;
     $('#carpetas').innerHTML =
+      '<p class="dentrode">' +
+        (madre ? 'Nueva adentro de <b>' + esc(madre.name) + '</b>' : 'Carpeta nueva, de las de arriba') +
+      '</p>' +
       '<div class="newf">' +
-        '<input type="text" id="nf" placeholder="Nombre de la carpeta" maxlength="30" autocomplete="off">' +
+        '<input type="text" id="nf" placeholder="Nombre" maxlength="30" autocomplete="off">' +
         '<button data-crear>Crear</button>' +
       '</div>' +
       '<button class="pick volver" data-volver>&laquo; elegir una existente</button>';
@@ -1136,11 +1175,15 @@ function askGuardar(base){
     nf.onkeydown = function(ev){ if(ev.key === 'Enter'){ ev.preventDefault(); crearYGuardar(); } };
   }
 
+  /* Crear desde aca guarda ahi mismo: si la estas creando en este momento,
+     es porque lo que tenes en la mano va adentro. */
   function crearYGuardar(){
     var n = $('#nf').value.trim();
     if(!n){ $('#nf').focus(); return; }
-    var nueva = {id:'f' + Date.now(), name:n, items:[], creadaEn:Date.now(), nombreEn:Date.now()};
+    var nueva = {id:'f' + Date.now(), name:n, items:[], padre:nuevoPadre,
+                 creadaEn:Date.now(), nombreEn:Date.now()};
     db.folders.push(nueva);
+    if(nuevoPadre) abiertosGuardar[nuevoPadre] = true;
     guardarEn(nueva);
   }
 
@@ -1200,9 +1243,18 @@ function askGuardar(base){
         return;
       }
       if(e.target.closest('[data-cancel]')){ closeModal(); return; }
-      if(e.target.closest('[data-nueva]')){ panelNueva(); return; }
+      if(e.target.closest('[data-nueva]')){ panelNueva(null); return; }
       if(e.target.closest('[data-volver]')){ $('#carpetas').innerHTML = listaCarpetas(); return; }
       if(e.target.closest('[data-crear]')){ crearYGuardar(); return; }
+
+      var ab = e.target.closest('[data-abrir]');
+      if(ab){
+        abiertosGuardar[ab.dataset.abrir] = abiertosGuardar[ab.dataset.abrir] === false;
+        $('#carpetas').innerHTML = listaCarpetas();
+        return;
+      }
+      var dn = e.target.closest('[data-dentro]');
+      if(dn){ panelNueva(dn.dataset.dentro); return; }
 
       var fb = e.target.closest('[data-folder]');
       if(fb) guardarEn(db.folders.filter(function(x){ return x.id === fb.dataset.folder; })[0]);
