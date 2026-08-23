@@ -32,7 +32,7 @@
    =========================================================== */
 :root{
   --page:#dfe6ec; --panel:#fff;
-  --ink:#000; --ink-2:#666; --ink-3:#6f6f6f; --ink-4:#555;
+  --ink:#000; --ink-2:#525c66; --ink-3:#6f6f6f; --ink-4:#555;
   --line:#e2e2e2; --edge:#9a9a9a;
   --link:#0000cc; --link-v:#551a8b;
   --red:#cc181e; --red-text:#cc181e; --green:#2e7d32;
@@ -86,6 +86,15 @@
   --shadow:rgba(0,0,0,.6); --veil:rgba(0,0,0,.65);
 }
 
+/* Dos colores que faltaban: el azul que reemplaza al rojo en el segmentado
+   (el rojo queda solo para EN VIVO y el logo) y el rojo de los botones que
+   destruyen algo. Se definen aparte para no repetir las tres paletas. */
+:root{--sel:#3d6a9c; --peligro-a:#d95459; --peligro-b:#b81f26; --peligro-edge:#8f181e}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--sel:#3f6da4; --peligro-a:#7d2a2e; --peligro-b:#5d1e21; --peligro-edge:#8c3a3e}
+}
+:root[data-theme="dark"]{--sel:#3f6da4; --peligro-a:#7d2a2e; --peligro-b:#5d1e21; --peligro-edge:#8c3a3e}
+
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{
@@ -111,8 +120,20 @@ a:visited{color:var(--link-v)}
 .topright a{font-size:11px;margin-left:7px}
 
 /* ---- pestanas ---- */
+.tabswrap{position:relative}
+/* Sin esto, con cinco carpetas la sexta no existe: la barra esta oculta y
+   nada avisa que hay mas al costado. Cada degradado aparece solo del lado
+   donde efectivamente quedo contenido cortado. */
+.tabswrap::before,.tabswrap::after{
+  content:"";position:absolute;top:0;bottom:0;width:24px;z-index:3;
+  pointer-events:none;opacity:0;transition:opacity .15s}
+.tabswrap::before{left:0;background:linear-gradient(90deg,var(--page),transparent)}
+.tabswrap::after{right:0;background:linear-gradient(270deg,var(--page),transparent)}
+.tabswrap.hay-izq::before,.tabswrap.hay-der::after{opacity:1}
+@media (prefers-reduced-motion:reduce){.tabswrap::before,.tabswrap::after{transition:none}}
 .tabs{display:flex;gap:2px;overflow-x:auto;white-space:nowrap;
-  padding:0 2px;scrollbar-width:none}
+  padding:0 2px;scrollbar-width:none;scroll-behavior:smooth}
+.tabs .tab{scroll-snap-align:end}
 .tabs::-webkit-scrollbar{display:none}
 .tab{
   font:bold 11px/1 Arial,Helvetica,sans-serif;letter-spacing:.08em;
@@ -121,7 +142,7 @@ a:visited{color:var(--link-v)}
   padding:15px 14px 14px;cursor:pointer;flex:none;text-transform:uppercase
 }
 .tab.on{background:var(--panel);color:var(--ink);padding-bottom:15px;position:relative;z-index:2}
-.tab.add{font-size:15px;letter-spacing:0;padding:13px 14px 12px;color:var(--ink-2)}
+.tab.nueva{font-size:15px;letter-spacing:0;padding:13px 14px 12px;color:var(--ink-2)}
 
 /* ---- barra celeste ---- */
 .bluebar{
@@ -157,25 +178,34 @@ select{
 /* ---- filas de contenido ----
    La fila entera dispara. El texto conserva el aspecto de link chico de 2005,
    pero el area tactil es toda la fila: se usa a oscuras y con una mano. */
-.row{display:flex;gap:10px;padding:11px 4px;margin:0 -4px;
+.row{display:flex;gap:10px;padding:12px 4px;margin:0 -4px;
   border-bottom:1px solid var(--line);align-items:flex-start;cursor:pointer}
 .row:last-of-type{border-bottom:none}
 .row:active{background:var(--row-hit)}
 .th{width:96px;height:72px;flex:none;border:1px solid var(--thumb-edge);
   background:var(--thumb);object-fit:cover}
 .info{flex:1;min-width:0}
-.ttl{font-size:13px;font-weight:bold;line-height:1.25;margin:0 0 3px;
+/* El titulo era azul de link a 13px y competia con las acciones, que tambien
+   son azules. Ahora es tinta plena a 15px: el azul quedo para lo que se toca
+   aparte, y el subrayado solo aparece al presionar la fila. */
+.ttl{font-size:15px;font-weight:bold;line-height:1.25;margin:0 0 4px;color:var(--ink);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.row:active .ttl{text-decoration:underline}
 .chan{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sub{font-size:11px;color:var(--ink-2);line-height:1.6}
 .sub b{color:var(--ink-3)}
 .live{color:var(--red-text);font-weight:bold}
 
-/* Deliberadamente chicos: son las acciones secundarias y una es destructiva,
-   asi que no compiten con el area de disparo. "eliminar" ademas pide confirmar. */
-.acts{margin-top:5px;font-size:11px}
-.acts a{margin-right:12px;padding:3px 0;display:inline-block}
-.saved{color:var(--green);font-size:11px}
+/* Antes "guardar" era un link de 11px DENTRO de la fila que dispara: el
+   toque impreciso abria YouTube cuando querias guardar. Ahora tiene columna
+   propia de 44x44 a la derecha, igual que la X de la lista guardada. */
+.add{width:44px;height:44px;flex:none;align-self:center;padding:0;
+  font:bold 20px/1 Arial,Helvetica,sans-serif;color:var(--btn-ink);
+  background:linear-gradient(var(--btn-a),var(--btn-b));
+  border:1px solid var(--btn-edge);border-radius:3px}
+.add:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
+.add.on{background:none;border-color:var(--green);color:var(--green);font-size:17px}
+.saved{color:var(--green)}
 
 /* ---- lista guardada: compacta, para ver muchas de un vistazo ----
    Sigue midiendo mas de 50px de alto, que es lo minimo para tocar sin mirar. */
@@ -188,7 +218,25 @@ select{
   padding:9px 7px;flex:none;border-radius:3px}
 .x:active{background:var(--x-hit);color:var(--red-text)}
 
+/* Modo ordenar: mientras esta prendido la fila no dispara, asi que mover una
+   radio no puede terminar en YouTube por accidente. */
+.ord{display:flex;flex-direction:column;gap:3px;flex:none}
+.ord button{width:40px;height:25px;padding:0;font-size:9px;border-radius:3px}
+.ord button:disabled{opacity:.35}
+.row.ordenando{cursor:default;background:var(--row-hit)}
+
+.more{text-align:center;padding:16px 0 4px}
+.more button{width:100%;max-width:280px}
 .empty{color:var(--ink-3);font-size:12px;text-align:center;padding:46px 14px;line-height:1.7}
+.empty .errt{display:block;color:var(--ink);font-size:14px;margin-bottom:6px}
+.empty button{margin-top:12px}
+.det{margin-top:16px;font-size:11px;color:var(--ink-3);text-align:left}
+.det summary{cursor:pointer;color:var(--link);margin-bottom:6px}
+
+/* P7: cinta de sin conexion, entre la barra de busqueda y el panel */
+.cinta{background:var(--bar);border:1px solid var(--edge);border-top:none;
+  font-size:11px;color:var(--ink-4);padding:7px 12px;text-align:center}
+.cinta[hidden]{display:none}
 .foot{margin-top:14px;padding-top:10px;border-top:1px solid var(--line);
   font-size:11px;color:var(--ink-3)}
 /* Pie de pagina, como los del sitio de la epoca */
@@ -215,13 +263,17 @@ select{
 .pick.nueva{border-style:dashed}
 .hint{font-size:11px;color:var(--ink-2);margin:10px 0 6px;font-weight:bold}
 .box .close{width:100%;margin-top:4px}
+.box .close.peligro{color:#fff;border-color:var(--peligro-edge);
+  background:linear-gradient(var(--peligro-a),var(--peligro-b))}
 
 /* Control segmentado radio / stream, en lugar de dos botones grandes */
 .seg{display:flex;border:1px solid var(--field-edge);border-radius:3px;overflow:hidden;margin-bottom:7px}
 .seg button{flex:1;border:none;border-radius:0;padding:11px 6px;font-size:12px;
   color:var(--tab-ink);background:linear-gradient(var(--tab-a),var(--tab-b))}
 .seg button + button{border-left:1px solid var(--bar-line)}
-.seg button.on{background:var(--red);color:#fff;font-weight:bold}
+/* Era rojo, igual que EN VIVO y que el logo: tres cosas distintas con el
+   mismo color. El rojo se quedo con el vivo; la seleccion pasa al azul. */
+.seg button.on{background:var(--sel);color:#fff;font-weight:bold}
 .box p.segnote{font-size:11px;color:var(--ink-3);margin:0 0 13px;line-height:1.45}
 
 .newf{display:flex;gap:6px;margin-bottom:6px}
@@ -240,7 +292,7 @@ select{
     </div>
   </div>
 
-  <div class="tabs" id="tabs"></div>
+  <div class="tabswrap"><div class="tabs" id="tabs"></div></div>
 
   <div class="bluebar">
     <div class="row1">
@@ -261,6 +313,8 @@ select{
       </select>
     </div>
   </div>
+
+  <div class="cinta" id="cinta" hidden>Sin conexion &middot; las carpetas se abren igual, buscar no</div>
 
   <div class="panel" id="panel"></div>
 
@@ -395,12 +449,24 @@ function carpetaDe(ytId){
 /* ============ estado de vista ============ */
 var current = db.folders[0].id;   /* carpeta abierta */
 var results = null;               /* si hay busqueda activa */
+var modoOrden = false;            /* la lista guardada se esta reordenando */
 
 function renderTabs(){
   $('#tabs').innerHTML = db.folders.map(function(f){
     return '<button class="tab' + (!results && f.id === current ? ' on' : '') +
            '" data-tab="' + esc(f.id) + '">' + esc(f.name) + '</button>';
-  }).join('') + '<button class="tab add" data-newfolder title="Nueva carpeta">+</button>';
+  }).join('') + '<button class="tab nueva" data-newfolder title="Nueva carpeta">+</button>';
+
+  var activa = $('#tabs').querySelector('.tab.on');
+  if(activa && activa.scrollIntoView) activa.scrollIntoView({block:'nearest', inline:'nearest'});
+  sombrasTabs();
+}
+
+/* Los degradados de los costados se prenden solo del lado que quedo cortado. */
+function sombrasTabs(){
+  var t = $('#tabs'), w = t.parentNode;
+  w.classList.toggle('hay-izq', t.scrollLeft > 2);
+  w.classList.toggle('hay-der', t.scrollLeft + t.clientWidth < t.scrollWidth - 2);
 }
 
 function render(){
@@ -415,25 +481,41 @@ function renderFolder(){
   var html = '';
 
   if(!f.items.length){
+    modoOrden = false;
     html = '<div class="empty">Esta carpeta esta vacia.<br>' +
-           'Busca algo arriba y toca <b>guardar</b> en el resultado.</div>';
+           'Busca algo arriba y toca <b>+</b> en el resultado.</div>';
   } else {
-    html = f.items.map(function(it){
-      return '<div class="row compact" data-open="' + esc(it.ytId) + '">' +
+    var ultimo = f.items.length - 1;
+    html = f.items.map(function(it, i){
+      /* Mientras se ordena la fila deja de disparar: mover una radio no puede
+         terminar en YouTube por un toque de mas. */
+      return '<div class="row compact' + (modoOrden ? ' ordenando' : '') + '"' +
+             (modoOrden ? '' : ' data-open="' + esc(it.ytId) + '"') + '>' +
         '<img class="th" src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
         '<div class="info">' +
-          '<p class="ttl"><a>' + esc(it.title) + '</a></p>' +
+          '<p class="ttl">' + esc(it.title) + '</p>' +
           '<div class="sub">' +
             (it.kind === 'radio' ? '<span class="live">en vivo</span>' : esc(it.channel)) +
           '</div>' +
         '</div>' +
-        '<button class="x" data-rm="' + esc(it.ytId) + '" title="Eliminar">&times;</button>' +
+        (modoOrden
+          ? '<div class="ord">' +
+              '<button data-up="' + i + '" title="Subir"' + (i === 0 ? ' disabled' : '') + '>&#9650;</button>' +
+              '<button data-down="' + i + '" title="Bajar"' + (i === ultimo ? ' disabled' : '') + '>&#9660;</button>' +
+            '</div>'
+          : '<button class="x" data-rm="' + esc(it.ytId) + '" title="Eliminar">&times;</button>') +
       '</div>';
     }).join('');
   }
 
-  html += '<div class="foot">' + plural(f.items.length, 'elemento', 'elementos') + ' en esta carpeta';
-  if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar carpeta</a>';
+  html += '<div class="foot">';
+  if(modoOrden){
+    html += 'Move cada uno con las flechas &middot; <a data-orden>listo</a>';
+  } else {
+    html += plural(f.items.length, 'elemento', 'elementos') + ' en esta carpeta';
+    if(f.items.length > 1)    html += ' &middot; <a data-orden>ordenar</a>';
+    if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar carpeta</a>';
+  }
   html += '</div>';
 
   $('#panel').innerHTML = html;
@@ -453,36 +535,93 @@ function renderResults(){
     return '<div class="row" data-play="' + i + '">' +
       '<img class="th" src="' + esc(th) + '" alt="" onerror="imgFallback(this)">' +
       '<div class="info">' +
-        '<p class="ttl"><a>' + esc(s.title) + '</a></p>' +
+        '<p class="ttl">' + esc(s.title) + '</p>' +
         '<div class="sub">' + (live ? '<span class="live">EN VIVO</span> &middot; ' : '') +
-          'de <b>' + esc(s.channelTitle) + '</b></div>' +
-        '<div class="acts">' +
-          (ya ? '<span class="saved">&#10003; guardado en ' + esc(ya) + '</span>'
-              : '<a data-save="' + i + '">guardar</a>') +
+          'de <b>' + esc(s.channelTitle) + '</b>' +
+          (ya ? ' &middot; <span class="saved">&#10003; en ' + esc(ya) + '</span>' : '') +
         '</div>' +
-      '</div></div>';
+      '</div>' +
+      '<button class="add' + (ya ? ' on' : '') + '" data-save="' + i + '" title="' +
+        (ya ? 'Ya esta en ' + esc(ya) + '. Tocalo para guardarlo tambien en otra carpeta'
+            : 'Guardar') + '">' + (ya ? '&#10003;' : '+') + '</button>' +
+    '</div>';
   }).join('');
+
+  /* La API entrega el token de la pagina siguiente; solo cuando existe hay mas. */
+  if(results.next) html += '<div class="more"><button data-more>traer 50 mas</button></div>';
 
   $('#panel').innerHTML = html;
 }
 
-/* ============ busqueda ============ */
-function doSearch(){
-  var q = $('#q').value.trim();
+/* ============ errores ============
+   La API contesta en ingles y con vocabulario de API. Traducimos por el
+   "reason", que es lo unico estable: el texto de Google cambia sin aviso. */
+function traducirError(err){
+  var api = (err && err.api && err.api.error) || {};
+  var razon = (api.errors && api.errors[0] && api.errors[0].reason) || '';
+  var texto = api.message || (err && err.message) || '';
+
+  if(razon === 'quotaExceeded' || razon === 'dailyLimitExceeded')
+    return {t:'Se acabo la cuota de hoy',
+            p:'La clave da unas 100 busquedas por dia y se renueva a las 4 de la manana. Lo que tenes guardado se abre igual.'};
+
+  if(razon === 'keyInvalid' || texto.indexOf('API key not valid') > -1)
+    return {t:'La clave no sirve',
+            p:'Puede estar mal copiada, o borrada en Google Cloud.', clave:true};
+
+  if(razon === 'ipRefererBlocked')
+    return {t:'Google rechazo la clave desde aca',
+            p:'La clave tiene una restriccion que no incluye a este sitio.', clave:true};
+
+  if(razon === 'accessNotConfigured')
+    return {t:'Falta habilitar la API',
+            p:'En Google Cloud hay que activar YouTube Data API v3 para este proyecto.'};
+
+  return {t:'No se pudo buscar', p:'', detalle:texto};
+}
+
+function mostrarError(m){
+  var html = '<div class="empty"><b class="errt">' + esc(m.t) + '</b>';
+  if(m.p)       html += esc(m.p);
+  if(m.clave)   html += '<br><button data-abrirclave>Cambiar la clave</button>';
+  if(m.detalle) html += '<details class="det"><summary>detalle tecnico</summary>' + esc(m.detalle) + '</details>';
+  $('#panel').innerHTML = html + '</div>';
+}
+
+/* ============ busqueda ============
+   Sin token trae la primera pagina; con token agrega la siguiente abajo,
+   sin perder lo que ya estabas mirando. */
+function doSearch(token){
+  var q = token ? results.q : $('#q').value.trim();
   if(!q) return;
   if(!getKey()){ askKey(); return; }
+  if(!navigator.onLine){
+    mostrarError({t:'Estas sin conexion',
+                  p:'Las carpetas guardadas se abren igual; buscar necesita senal.'});
+    return;
+  }
 
-  $('#panel').innerHTML = '<div class="loading">Buscando&hellip;</div>';
+  var boton = token ? $('#panel').querySelector('[data-more]') : null;
+  if(boton){ boton.disabled = true; boton.textContent = 'buscando...'; }
+  else $('#panel').innerHTML = '<div class="loading">Buscando&hellip;</div>';
 
-  var liveOnly = $('#f-live').value === 'live';
-  var p = new URLSearchParams({key:getKey(), part:'snippet', q:q, type:'video', maxResults:'25'});
+  var liveOnly = token ? results.liveOnly : $('#f-live').value === 'live';
+  var largo    = token ? results.largo    : $('#f-long').value === 'long';
+
+  /* 50 es el maximo que permite la API y cuesta lo mismo que pedir 25. */
+  var p = new URLSearchParams({key:getKey(), part:'snippet', q:q, type:'video', maxResults:'50'});
   if(liveOnly) p.set('eventType','live');
-  if($('#f-long').value === 'long') p.set('videoDuration','long');
+  if(largo)    p.set('videoDuration','long');
+  if(token)    p.set('pageToken', token);
 
   fetch('https://www.googleapis.com/youtube/v3/search?' + p.toString())
     .then(function(r){
       return r.json().then(function(d){
-        if(!r.ok) throw new Error((d.error && d.error.message) || ('HTTP ' + r.status));
+        if(!r.ok){
+          var e = new Error((d.error && d.error.message) || ('HTTP ' + r.status));
+          e.api = d;
+          throw e;
+        }
         return d;
       });
     })
@@ -496,19 +635,34 @@ function doSearch(){
           return !liveOnly || (it.snippet && it.snippet.liveBroadcastContent === 'live');
         });
 
+      if(token){
+        results.items = results.items.concat(items);
+        results.next  = data.nextPageToken || '';
+        render();                       /* el scroll se queda donde estaba */
+        return;
+      }
+
       if(!items.length){
         results = null; render();
         $('#panel').innerHTML = '<div class="empty">Sin resultados para <b>' + esc(q) + '</b>.' +
           (liveOnly ? '<br>Puede que no haya nadie transmitiendo ahora.' : '') + '</div>';
         return;
       }
-      results = {q:q, items:items};
+
+      results = {q:q, items:items, next:data.nextPageToken || '',
+                 liveOnly:liveOnly, largo:largo};
       render();
       window.scrollTo(0,0);
     })
     .catch(function(err){
-      $('#panel').innerHTML = '<div class="empty">No se pudo buscar.<br><br>' +
-                              esc(err.message) + '</div>';
+      var m = traducirError(err);
+      /* Si fallo al traer mas, no borramos lo que ya estaba en pantalla. */
+      if(boton){
+        boton.disabled = false;
+        boton.textContent = m.t + ' - reintentar';
+        return;
+      }
+      mostrarError(m);
     });
 }
 
@@ -556,7 +710,9 @@ function askSave(idx){
   function guardarEn(folder){
     var ytId = kind === 'radio' ? s.channelId : it.id.videoId;
     if(folder.items.some(function(x){ return x.ytId === ytId; })){
-      closeModal(); alert('Ya estaba en ' + folder.name); return;
+      closeModal();
+      avisar('Ya estaba guardado', 'Esto ya esta en <b>' + esc(folder.name) + '</b>.');
+      return;
     }
     var nuevo = {
       kind: kind,
@@ -641,6 +797,31 @@ $('#modal').addEventListener('click', function(e){ if(e.target.id === 'modal') c
    elemento y llamaba querySelector sobre el evento, asi que el handler se
    rompia en el primer toque y "Guardar" no guardaba nunca: por eso la clave
    volvia a pedirse en cada visita. */
+/* ============ preguntar y avisar ============
+   Reemplazan a confirm() y alert(): los del sistema aparecen justo en los
+   momentos de decision y ahi es donde mas se nota que no son de la app. */
+function confirmar(titulo, cuerpo, etiqueta, alSi){
+  openModal(
+    '<h3>' + esc(titulo) + '</h3><div class="body">' +
+      '<p>' + cuerpo + '</p>' +
+      '<button class="close peligro" data-si>' + esc(etiqueta) + '</button>' +
+      '<button class="close" data-cancel>Cancelar</button>' +
+    '</div>',
+    function(e){
+      if(e.target.closest('[data-si]')){ closeModal(); alSi(); return; }
+      if(e.target.closest('[data-cancel]')) closeModal();
+    });
+}
+
+function avisar(titulo, cuerpo){
+  openModal(
+    '<h3>' + esc(titulo) + '</h3><div class="body">' +
+      '<p>' + cuerpo + '</p>' +
+      '<button class="close" data-cancel>Listo</button>' +
+    '</div>',
+    function(e){ if(e.target.closest('[data-cancel]')) closeModal(); });
+}
+
 function askKey(){
   function decir(t){ $('#keymsg').textContent = t; }
 
@@ -732,7 +913,7 @@ if(window.matchMedia){
 
 $('#tabs').addEventListener('click', function(e){
   var t = e.target.closest('[data-tab]');
-  if(t){ current = t.dataset.tab; results = null; render(); return; }
+  if(t){ current = t.dataset.tab; results = null; modoOrden = false; render(); return; }
   if(e.target.closest('[data-newfolder]')) askNewFolder();
 });
 
@@ -779,19 +960,34 @@ $('#panel').addEventListener('click', function(e){
   if((a = e.target.closest('[data-rm]'))){
     var fr = db.folders.filter(function(x){ return x.id === current; })[0];
     var item = fr.items.filter(function(i){ return i.ytId === a.dataset.rm; })[0];
-    if(!confirm('Eliminar "' + item.title + '"?')) return;
-    fr.items = fr.items.filter(function(i){ return i.ytId !== a.dataset.rm; });
-    save(); render(); return;
+    var id = a.dataset.rm;
+    confirmar('Eliminar', 'Se saca <b>' + esc(item.title) + '</b> de esta carpeta.', 'Eliminar',
+      function(){
+        fr.items = fr.items.filter(function(i){ return i.ytId !== id; });
+        save(); render();
+      });
+    return;
   }
   if(e.target.closest('[data-delfolder]')){
     var fd = db.folders.filter(function(x){ return x.id === current; })[0];
-    if(!confirm('Borrar la carpeta "' + fd.name + '"' +
-                (fd.items.length ? ' y sus ' + plural(fd.items.length, 'elemento', 'elementos') : '') +
-                '?')) return;
-    db.folders = db.folders.filter(function(x){ return x.id !== fd.id; });
-    current = db.folders[0].id; save(); render();
+    confirmar('Borrar carpeta',
+      'Se borra <b>' + esc(fd.name) + '</b>' +
+      (fd.items.length ? ' con sus ' + plural(fd.items.length, 'elemento', 'elementos') : '') + '.',
+      'Borrar',
+      function(){
+        db.folders = db.folders.filter(function(x){ return x.id !== fd.id; });
+        current = db.folders[0].id; modoOrden = false; save(); render();
+      });
     return;
   }
+
+  /* Ordenar y traer mas van antes del disparo: viven dentro de la fila y
+     closest() las taparia. */
+  if((a = e.target.closest('[data-up]')))   { mover(+a.dataset.up,   -1); return; }
+  if((a = e.target.closest('[data-down]'))) { mover(+a.dataset.down,  1); return; }
+  if(e.target.closest('[data-orden]'))      { modoOrden = !modoOrden; render(); return; }
+  if(e.target.closest('[data-more]'))       { doSearch(results.next); return; }
+  if(e.target.closest('[data-abrirclave]')) { askKey(); return; }
 
   /* Recien ahora: el disparo, que ocupa toda la fila. */
   if((a = e.target.closest('[data-play]'))){
@@ -803,13 +999,29 @@ $('#panel').addEventListener('click', function(e){
   }
 });
 
+/* Intercambia con el vecino: alcanza para acomodar una lista a mano y no
+   necesita arrastrar, que en tactil pelea con el scroll de la pagina. */
+function mover(i, paso){
+  var f = db.folders.filter(function(x){ return x.id === current; })[0];
+  var j = i + paso;
+  if(j < 0 || j >= f.items.length) return;
+  var tmp = f.items[i]; f.items[i] = f.items[j]; f.items[j] = tmp;
+  save(); render();
+}
+
 /* ============ respaldo ============
    Las carpetas viven solo en localStorage: si se limpian los datos del
    navegador, se pierden. Esto es la unica copia posible. */
 $('#exp').onclick = function(){
   var total = db.folders.reduce(function(a,f){ return a + f.items.length; }, 0);
-  if(!total && !confirm('No hay nada guardado todavia. Descargar igual?')) return;
+  if(!total){
+    confirmar('No hay nada guardado', 'El archivo va a salir vacio.', 'Descargar igual', bajar);
+    return;
+  }
+  bajar();
+};
 
+function bajar(){
   /* La clave viaja en el respaldo: restaurar en un telefono nuevo deja la app
      lista de una. Es tu clave en tu archivo, pero no lo pases por ahi. */
   var datos = JSON.stringify({
@@ -824,7 +1036,7 @@ $('#exp').onclick = function(){
   a.click();
   a.remove();
   setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
-};
+}
 
 $('#imp').onclick = function(){ $('#file').click(); };
 
@@ -837,29 +1049,32 @@ $('#file').onchange = function(e){
   fr.onload = function(){
     var d;
     try { d = JSON.parse(fr.result); }
-    catch(err){ alert('Ese archivo no es un respaldo valido.'); return; }
+    catch(err){ avisar('Archivo invalido', 'Eso no parece un respaldo de mytbe.'); return; }
 
     /* Nos quedamos solo con lo que tiene forma de carpeta, por si el archivo
        viene de una version distinta o esta a medio editar. */
     var folders = (d && d.folders || []).filter(function(x){
       return x && x.id && x.name && Object.prototype.toString.call(x.items) === '[object Array]';
     });
-    if(!folders.length){ alert('El archivo no contiene carpetas.'); return; }
+    if(!folders.length){ avisar('Archivo invalido', 'El archivo no contiene ninguna carpeta.'); return; }
 
     var total = folders.reduce(function(a,x){ return a + x.items.length; }, 0);
     var traeClave = claveValida(String(d.clave || '').trim());
-    if(!confirm('Restaurar ' + plural(folders.length, 'carpeta', 'carpetas') +
-                ' con ' + plural(total, 'elemento', 'elementos') +
-                (traeClave ? ' y la clave de API' : '') + '?\n\n' +
-                'Reemplaza todo lo que tenes guardado ahora.')) return;
-
-    db.folders = folders;
-    if(traeClave) setKey(String(d.clave).trim());
-    save();
-    current = db.folders[0].id;
-    results = null;
-    render();
-    alert('Respaldo restaurado.');
+    confirmar('Restaurar respaldo',
+      'Vuelven <b>' + plural(folders.length, 'carpeta', 'carpetas') + '</b> con ' +
+      plural(total, 'elemento', 'elementos') + (traeClave ? ' y la clave de API' : '') +
+      '. Reemplaza todo lo que tenes guardado ahora.',
+      'Restaurar',
+      function(){
+        db.folders = folders;
+        if(traeClave) setKey(String(d.clave).trim());
+        save();
+        current = db.folders[0].id;
+        results = null;
+        modoOrden = false;
+        render();
+        avisar('Listo', 'Respaldo restaurado.');
+      });
   };
   fr.readAsText(f);
 };
@@ -873,7 +1088,16 @@ if('serviceWorker' in navigator){
   });
 }
 
+/* ============ conexion ============ */
+function estadoRed(){ $('#cinta').hidden = navigator.onLine; }
+window.addEventListener('online',  estadoRed);
+window.addEventListener('offline', estadoRed);
+
+$('#tabs').addEventListener('scroll', sombrasTabs);
+window.addEventListener('resize', sombrasTabs);
+
 aplicarTema();
+estadoRed();
 renderQuota();
 render();
 </script>

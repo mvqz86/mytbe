@@ -6,7 +6,7 @@
    Estrategia: red primero, cache como respaldo. Asi cada push a Pages se ve
    enseguida, y si no hay senal igual abre lo ultimo que se descargo. */
 
-var CACHE = 'mytbe-v1';
+var CACHE = 'mytbe-v2';
 var SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './favicon-32.png'];
 
 self.addEventListener('install', function(e){
