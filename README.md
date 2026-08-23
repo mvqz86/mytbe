@@ -43,6 +43,11 @@ cuota: es una direccion.
 - **▶ reproducir**, en el pie, reproduce todo lo que se ve, en ese orden. Con
   el filtro puesto, reproduce lo filtrado: se arma una lista escribiendo tres
   letras.
+- **elegir**, en el pie, prende el modo de eleccion: las filas dejan de
+  disparar y se marcan con un toque, numeradas en el orden en que las tocaste,
+  que es el orden en que van a sonar. Vale mezclar carpetas y hasta solapas
+  distintas, y el filtro sigue andando mientras elegis: buscas, marcas, borras
+  el filtro, buscas otra cosa y marcas de nuevo.
 - **guardar como lista** guarda eso mismo como un item, con nombre propio, en
   la solapa o carpeta que elijas. Despues se toca y suena todo seguido.
 

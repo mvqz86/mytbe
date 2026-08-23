@@ -274,6 +274,12 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .ord button:disabled{opacity:.35}
 .row.ordenando{cursor:default;background:var(--row-hit)}
 
+/* Eligiendo: el numero dice en que orden va a sonar, no solo que esta puesto. */
+.row.marcado{background:var(--row-hit)}
+.row.apagada{opacity:.45}
+.add.vacio{border:none;background:none}
+.row.eligiendo .add{font-size:15px}
+
 .more{text-align:center;padding:16px 0 4px}
 .more button{width:100%;max-width:280px}
 .empty{color:var(--ink-3);font-size:12px;text-align:center;padding:46px 14px;line-height:1.7}
@@ -783,6 +789,15 @@ function carpetaDe(ytId){
 var current = db.folders[0].id;   /* carpeta abierta */
 var results = null;               /* si hay busqueda activa */
 var modoOrden = false;            /* la lista guardada se esta reordenando */
+/* Los elegidos a mano para una lista. Viven fuera de la carpeta a proposito:
+   se pueden juntar de varias carpetas y hasta de varias solapas, y quedan en
+   el orden en que se fueron tocando, que es el orden en que van a sonar. */
+var modoElegir = false, elegidos = [];
+
+function posicionElegido(ytId){
+  for(var i = 0; i < elegidos.length; i++) if(elegidos[i].ytId === ytId) return i;
+  return -1;
+}
 
 function renderTabs(){
   /* Solo las de primer nivel: las de adentro se ven al entrar, y asi la fila
@@ -949,8 +964,19 @@ function renderFolder(){
   }
 
   function fila(it, duena, i, ultimo){
-    return '<div class="row compact lista' + (modoOrden ? ' ordenando' : '') + '"' +
-           (modoOrden ? '' : ' data-open="' + esc(it.ytId) + '"') +
+    /* Eligiendo, la fila deja de disparar y pasa a marcar. Lo que no es un
+       video no se puede elegir: una radio no tiene id de video y una lista no
+       entra adentro de otra. */
+    var elegible = modoElegir && it.kind === 'video';
+    var marcado = elegible && posicionElegido(it.ytId) > -1;
+
+    return '<div class="row compact lista' +
+           (modoOrden ? ' ordenando' : '') +
+           (modoElegir ? ' eligiendo' : '') +
+           (marcado ? ' marcado' : '') +
+           (modoElegir && !elegible ? ' apagada' : '') + '"' +
+           (modoOrden || modoElegir ? '' : ' data-open="' + esc(it.ytId) + '"') +
+           (elegible ? ' data-elegir="' + esc(it.ytId) + '"' : '') +
            ' data-en="' + esc(duena.id) + '">' +
       '<img class="th" src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
       '<div class="info">' +
@@ -971,8 +997,13 @@ function renderFolder(){
             '<button data-down="' + i + '" data-en="' + esc(duena.id) + '" title="Bajar"' +
               (i === ultimo ? ' disabled' : '') + '>&#9660;</button>' +
           '</div>'
-        : '<button class="x" data-rm="' + esc(it.ytId) + '" data-en="' + esc(duena.id) +
-          '" title="Eliminar">&times;</button>') +
+        : modoElegir
+          ? (elegible
+              ? '<button class="add' + (marcado ? ' on' : '') + '">' +
+                (marcado ? (posicionElegido(it.ytId) + 1) : '+') + '</button>'
+              : '<span class="add vacio"></span>')
+          : '<button class="x" data-rm="' + esc(it.ytId) + '" data-en="' + esc(duena.id) +
+            '" title="Eliminar">&times;</button>') +
     '</div>';
   }
 
@@ -1035,20 +1066,27 @@ function renderFolder(){
   }
 
   html += '<div class="foot">';
-  if(modoOrden){
+  if(modoElegir){
+    html += elegidos.length
+      ? plural(elegidos.length, 'elegido', 'elegidos') +
+        ' &middot; <a data-playelegidos>&#9654; reproducir</a>' +
+        ' &middot; <a data-listaelegidos>guardar como lista</a>'
+      : 'Toca los que quieras, de la carpeta que sea';
+    html += ' &middot; <a data-elegirmodo>listo</a>';
+  } else if(modoOrden){
     html += 'Move cada uno con las flechas &middot; <a data-orden>listo</a>';
   } else if(filtrando){
     html += plural(mostrados, 'elemento', 'elementos') + ' con ese texto';
     if(videosVisibles(f).length > 1){
       html += ' &middot; <a data-playtodo>&#9654; reproducir</a>' +
-              ' &middot; <a data-comolista>guardar como lista</a>';
+              ' &middot; <a data-elegirmodo>elegir</a>';
     }
   } else {
     html += plural(total, 'elemento', 'elementos');
     if(hijas.length) html += ' en ' + plural(grupos, 'grupo', 'grupos');
     if(videosVisibles(f).length > 1){
       html += ' &middot; <a data-playtodo>&#9654; reproducir</a>' +
-              ' &middot; <a data-comolista>guardar como lista</a>';
+              ' &middot; <a data-elegirmodo>elegir</a>';
     }
     html += ' &middot; <a data-nuevasub>' + esc(tipoHijaDe(f.id)) + ' nueva</a>';
     if(total > 1)             html += ' &middot; <a data-orden>ordenar</a>';
@@ -1365,7 +1403,7 @@ function askGuardar(base){
       (base.lista
         /* A una lista hay que ponerle nombre: no lo trae de ningun lado. */
         ? '<p class="segnote">Lista de <b>' + base.ytIds.length + ' videos</b>, en el orden ' +
-          'en que se ven. Como se llama?</p>' +
+          (base.aMano ? 'en que los elegiste' : 'en que se ven') + '. Como se llama?</p>' +
           '<input type="text" id="plname" maxlength="40" autocomplete="off" ' +
           'style="width:100%;margin-bottom:10px" value="' + esc(base.title) + '">'
         : '<p class="what">' + esc(String(base.title).slice(0,90)) + '</p>') +
@@ -1560,6 +1598,8 @@ if(window.matchMedia){
 $('#tabs').addEventListener('click', function(e){
   var t = e.target.closest('[data-tab]');
   if(t){ current = t.dataset.tab; results = null; modoOrden = false; render(); return; }
+  /* Ojo: modoElegir sobrevive al cambio de solapa. Es el punto: juntar cosas
+     de carpetas y de solapas distintas en una misma lista. */
   if(e.target.closest('[data-newfolder]')) askNewFolder();
 });
 
@@ -1656,6 +1696,36 @@ $('#panel').addEventListener('click', function(e){
   if(e.target.closest('[data-playtodo]')){
     var ft = carpetaPorId(current);
     reproducirLista(videosVisibles(ft), ft.name + (filtro.trim() ? ' ' + filtro.trim() : ''));
+    return;
+  }
+  if((a = e.target.closest('[data-elegir]'))){
+    var ya = posicionElegido(a.dataset.elegir);
+    if(ya > -1) elegidos.splice(ya, 1);
+    else {
+      var duena = carpetaPorId(a.dataset.en);
+      var cual = duena.items.filter(function(i){ return i.ytId === a.dataset.elegir; })[0];
+      if(cual) elegidos.push({ytId:cual.ytId, title:cual.title, thumb:cual.thumb || ''});
+    }
+    render();
+    return;
+  }
+  if(e.target.closest('[data-elegirmodo]')){
+    modoElegir = !modoElegir;
+    if(!modoElegir) elegidos = [];
+    modoOrden = false;
+    render();
+    return;
+  }
+  if(e.target.closest('[data-playelegidos]')){ reproducirLista(elegidos, 'Elegidos'); return; }
+  if(e.target.closest('[data-listaelegidos]')){
+    askGuardar({
+      lista: true,
+      ytIds: elegidos.map(function(i){ return i.ytId; }),
+      aMano: true,
+      title: 'Elegidos',
+      channel: '',
+      thumb: elegidos[0] ? elegidos[0].thumb : ''
+    });
     return;
   }
   if(e.target.closest('[data-comolista]')){
