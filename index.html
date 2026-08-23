@@ -306,6 +306,29 @@ function save(){ localStorage.setItem(LS, JSON.stringify(db)); }
 
 function getKey(){ return localStorage.getItem('mytbe.key') || ''; }
 function setKey(k){ localStorage.setItem('mytbe.key', k.trim()); }
+function claveValida(k){ return k.indexOf('AIza') === 0 && k.length >= 20; }
+
+/* La clave puede viajar en el enlace: .../mytbe/#k=AIza...
+   Asi se pone en un telefono nuevo sin volver a tipearla. La sacamos de la
+   barra apenas la guardamos, para que no quede a la vista ni en el historial. */
+function claveDelEnlace(){
+  var m = /[#&]k=([^&]*)/.exec(location.hash || '');
+  if(!m) return;
+  var k;
+  try { k = decodeURIComponent(m[1]).trim(); } catch(e){ k = ''; }
+  if(claveValida(k)) setKey(k);
+  if(history.replaceState) history.replaceState(null, '', location.pathname + location.search);
+  else location.hash = '';
+}
+claveDelEnlace();
+/* Si la app ya estaba abierta y pegan el enlace, cambia el hash sin recargar. */
+window.addEventListener('hashchange', claveDelEnlace);
+
+/* Sin esto, iOS y Android pueden barrer el localStorage de un sitio que no se
+   abre hace unos dias, y la clave se pierde sola aunque este bien guardada. */
+if(navigator.storage && navigator.storage.persist){
+  try { navigator.storage.persist(); } catch(e){}
+}
 
 /* ============ utilidades ============ */
 function $(s){ return document.querySelector(s); }
@@ -614,23 +637,55 @@ function closeModal(){
 }
 $('#modal').addEventListener('click', function(e){ if(e.target.id === 'modal') closeModal(); });
 
+/* Ojo: openModal entrega el EVENTO del click, no el elemento. Esto esperaba un
+   elemento y llamaba querySelector sobre el evento, asi que el handler se
+   rompia en el primer toque y "Guardar" no guardaba nunca: por eso la clave
+   volvia a pedirse en cada visita. */
 function askKey(){
+  function decir(t){ $('#keymsg').textContent = t; }
+
+  /* Si el navegador no deja copiar solo, dejamos el enlace escrito y
+     seleccionado para copiarlo a mano. */
+  function mostrarEnlace(url){
+    var i = $('#keyin');
+    i.value = url; i.focus(); i.select();
+    decir('No pude copiarlo solo: el enlace quedo seleccionado arriba, copialo a mano.');
+  }
+
   openModal(
     '<h3>Clave de API</h3><div class="body">' +
-    '<p>Pega tu clave de YouTube Data API v3. Queda guardada solo en este navegador.</p>' +
+    '<p>Pega tu clave de YouTube Data API v3. Queda guardada en este navegador.</p>' +
     '<input type="text" id="keyin" placeholder="AIza..." autocomplete="off" spellcheck="false" ' +
     'style="width:100%;margin-bottom:10px" value="' + esc(getKey()) + '">' +
+    '<p class="segnote" id="keymsg">Para otro dispositivo: guardala aca, copia el enlace y abrilo alla una sola vez. El enlace lleva la clave adentro, no lo publiques.</p>' +
     '<button class="close" id="keysave">Guardar</button>' +
+    '<button class="close" id="keycopy">Copiar enlace con la clave</button>' +
     '<button class="close" data-cancel>Cancelar</button></div>',
-    function(el){
-      el.querySelector('#keysave').onclick = function(){
-        var v = el.querySelector('#keyin').value.trim();
-        if(v.indexOf('AIza') !== 0){ alert('Esa clave no parece valida.'); return; }
-        setKey(v); closeModal();
+    function(e){
+      if(e.target.closest('#keysave')){
+        var v = $('#keyin').value.trim();
+        if(!claveValida(v)){ decir('Esa clave no parece valida: todas empiezan con AIza.'); return; }
+        setKey(v);
+        closeModal();
         if($('#q').value.trim()) doSearch();
-      };
-      el.querySelector('[data-cancel]').onclick = closeModal;
+        return;
+      }
+      if(e.target.closest('#keycopy')){
+        var k = $('#keyin').value.trim() || getKey();
+        if(!claveValida(k)){ decir('Primero pega una clave valida y despues copia el enlace.'); return; }
+        setKey(k);                                  /* copiar tambien guarda */
+        var url = location.origin + location.pathname + '#k=' + encodeURIComponent(k);
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(url).then(
+            function(){ decir('Enlace copiado. Abrilo una vez en el otro dispositivo.'); },
+            function(){ mostrarEnlace(url); });
+        } else mostrarEnlace(url);
+        return;
+      }
+      if(e.target.closest('[data-cancel]')) closeModal();
     });
+
+  $('#keyin').focus();
 }
 
 /* ============ eventos ============ */
@@ -755,8 +810,11 @@ $('#exp').onclick = function(){
   var total = db.folders.reduce(function(a,f){ return a + f.items.length; }, 0);
   if(!total && !confirm('No hay nada guardado todavia. Descargar igual?')) return;
 
+  /* La clave viaja en el respaldo: restaurar en un telefono nuevo deja la app
+     lista de una. Es tu clave en tu archivo, pero no lo pases por ahi. */
   var datos = JSON.stringify({
-    app:'mytbe', version:1, fecha:new Date().toISOString(), folders:db.folders
+    app:'mytbe', version:1, fecha:new Date().toISOString(),
+    clave: getKey(), folders:db.folders
   }, null, 2);
 
   var a = document.createElement('a');
@@ -789,11 +847,14 @@ $('#file').onchange = function(e){
     if(!folders.length){ alert('El archivo no contiene carpetas.'); return; }
 
     var total = folders.reduce(function(a,x){ return a + x.items.length; }, 0);
+    var traeClave = claveValida(String(d.clave || '').trim());
     if(!confirm('Restaurar ' + plural(folders.length, 'carpeta', 'carpetas') +
-                ' con ' + plural(total, 'elemento', 'elementos') + '?\n\n' +
+                ' con ' + plural(total, 'elemento', 'elementos') +
+                (traeClave ? ' y la clave de API' : '') + '?\n\n' +
                 'Reemplaza todo lo que tenes guardado ahora.')) return;
 
     db.folders = folders;
+    if(traeClave) setKey(String(d.clave).trim());
     save();
     current = db.folders[0].id;
     results = null;
