@@ -21,10 +21,12 @@ la sincronizacion falla, el engranaje lleva un punto rojo.
 
 ## Resultados
 
-Se piden 50 por busqueda y se ordenan **de mas reproducciones a menos**. El
-numero no viene con la busqueda: hay que pedirlo aparte a `videos.list`, que
-cuesta 1 unidad para los 50 juntos. Si ese pedido falla, los resultados se
-muestran igual, sin numeros y en el orden de la API.
+Se piden 50 por busqueda y se ordenan **de mas reproducciones a menos**. Cada
+uno muestra su duracion y cuantas veces se vio. Ninguno de los dos datos viene
+con la busqueda: los dos salen de un pedido aparte a `videos.list`, que cuesta
+1 unidad para los 50 juntos. Si ese pedido falla, los resultados se muestran
+igual, sin numeros y en el orden de la API. Un vivo no lleva duracion: la API
+la devuelve como `P0D`, que no es un largo sino "esto todavia no termino".
 
 Los titulos de la API vienen escapados como HTML (`&quot;`, `&amp;`), asi que
 se desarman antes de mostrarlos y antes de guardarlos.

@@ -211,6 +211,7 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .chan{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sub{font-size:11px;color:var(--ink-2);line-height:1.6}
 .sub b{color:var(--ink-3)}
+.sub b.dura{color:var(--ink-2);font-variant-numeric:tabular-nums}
 .live{color:var(--red-text);font-weight:bold}
 
 /* Antes "guardar" era un link de 11px DENTRO de la fila que dispara: el
@@ -539,20 +540,38 @@ function vistas(n){
   return String(n);
 }
 
-/* search.list no trae cuantas veces se vio cada video: hay que pedirlo aparte
-   a videos.list, que cuesta 1 unidad para los 50 juntos. */
-function traerVistas(items){
+/* La API da la duracion en ISO: PT1H2M3S. Un vivo llega como P0D, que no es
+   una duracion sino "esto no termino", y ahi no se muestra nada. */
+function duracion(iso){
+  var m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || '');
+  if(!m) return '';
+  var h = (+(m[1] || 0)) * 24 + (+(m[2] || 0)), mi = +(m[3] || 0), se = +(m[4] || 0);
+  if(!h && !mi && !se) return '';
+  function dos(n){ return (n < 10 ? '0' : '') + n; }
+  return h ? h + ':' + dos(mi) + ':' + dos(se) : mi + ':' + dos(se);
+}
+
+/* search.list no trae ni las reproducciones ni la duracion: las dos hay que
+   pedirlas aparte a videos.list, que cuesta 1 unidad para los 50 juntos. */
+function traerDatos(items){
   var ids = items.map(function(it){ return it.id.videoId; }).join(',');
   if(!ids) return Promise.resolve(items);
-  return fetch('https://www.googleapis.com/youtube/v3/videos?part=statistics&id=' +
+  return fetch('https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=' +
                encodeURIComponent(ids) + '&key=' + encodeURIComponent(getKey()))
     .then(function(r){ return r.json(); })
     .then(function(d){
       var mapa = {};
       (d.items || []).forEach(function(v){
-        mapa[v.id] = +((v.statistics && v.statistics.viewCount) || 0);
+        mapa[v.id] = {
+          vistas: +((v.statistics && v.statistics.viewCount) || 0),
+          dura:   duracion(v.contentDetails && v.contentDetails.duration)
+        };
       });
-      items.forEach(function(it){ it.vistas = mapa[it.id.videoId] || 0; });
+      items.forEach(function(it){
+        var x = mapa[it.id.videoId] || {};
+        it.vistas = x.vistas || 0;
+        it.dura   = x.dura || '';
+      });
       return items;
     })
     /* Si esto falla, la busqueda igual sirve: se muestra sin numeros. */
@@ -920,6 +939,7 @@ function renderResults(){
       '<div class="info">' +
         '<p class="ttl">' + esc(limpiarTexto(s.title)) + '</p>' +
         '<div class="sub">' + (live ? '<span class="live">EN VIVO</span> &middot; ' : '') +
+          (it.dura ? '<b class="dura">' + esc(it.dura) + '</b> &middot; ' : '') +
           'de <b>' + esc(limpiarTexto(s.channelTitle)) + '</b>' +
           (it.vistas ? ' &middot; ' + esc(vistas(it.vistas)) + ' reproducciones' : '') +
           (ya ? ' &middot; <span class="saved">&#10003; en ' + esc(ya) + '</span>' : '') +
@@ -1025,7 +1045,7 @@ function doSearch(token){
       }
 
       /* Con los numeros en la mano se ordena de mas visto a menos. */
-      return traerVistas(items).then(function(conVistas){
+      return traerDatos(items).then(function(conVistas){
         if(token){
           results.items = results.items.concat(conVistas).sort(porVistas);
           results.next  = data.nextPageToken || '';
