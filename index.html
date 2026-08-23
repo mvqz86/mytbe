@@ -11,34 +11,104 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="mytbe">
+<script>
+/* Antes de pintar nada, para que no pegue un flash blanco al abrir de noche. */
+(function(){
+  try{
+    var t = localStorage.getItem('mytbe.tema');
+    if(t) document.documentElement.setAttribute('data-theme', t);
+  }catch(e){}
+})();
+</script>
 <style>
 /* ===========================================================
    Estetica YouTube 2005: Arial chica, cajas plateadas con
    biselado, links azules subrayados, barra celeste de formulario.
+
+   Los colores son variables porque hay dos paletas. El modo oscuro
+   no invierte: reinterpreta el plateado y el celeste en tonos frios
+   oscuros, y aclara el rojo y el azul de los links, que a #cc181e y
+   #0000cc quedarian ilegibles sobre fondo negro.
    =========================================================== */
+:root{
+  --page:#dfe6ec; --panel:#fff;
+  --ink:#000; --ink-2:#666; --ink-3:#6f6f6f; --ink-4:#555;
+  --line:#e2e2e2; --edge:#9a9a9a;
+  --link:#0000cc; --link-v:#551a8b;
+  --red:#cc181e; --red-text:#cc181e; --green:#2e7d32;
+  --bar:#c6d9ef; --bar-line:#a8bed2;
+  --field:#fff; --field-edge:#7f9db9; --field-focus:#4a76a8;
+  --btn-a:#fdfdfd; --btn-b:#dcdcdc; --btn-edge:#8c8c8c; --btn-ink:#1b1b1b;
+  --btn-a2:#d0d0d0; --btn-b2:#e8e8e8;
+  --tab-a:#fcfcfc; --tab-b:#cfcfcf; --tab-ink:#4d4d4d;
+  --thumb:#ececec; --thumb-edge:#999;
+  --row-hit:#eaf1fa; --x-ink:#767676; --x-hit:#f0f0f0;
+  --title-a:#5b87b8; --title-b:#3d6a9c; --box-edge:#7a7a7a;
+  --sel-bg:#fff8f8; --logo-ink:#1b1b1b; --foot-ink:#6b7a86;
+  --shadow:rgba(0,0,0,.35); --veil:rgba(0,0,0,.45);
+}
+/* Sistema en oscuro, salvo que el usuario haya elegido claro a mano */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --page:#171b21; --panel:#10141a;
+    --ink:#dfe4ea; --ink-2:#97a2ad; --ink-3:#7d8894; --ink-4:#8b96a1;
+    --line:#262d36; --edge:#39424d;
+    --link:#7fb2ff; --link-v:#c4a7e7;
+    --red:#cc181e; --red-text:#ff5f5f; --green:#6fbf73;
+    --bar:#1e2c3d; --bar-line:#3a4d64;
+    --field:#0b0e12; --field-edge:#46596e; --field-focus:#6f9fd0;
+    --btn-a:#39414b; --btn-b:#272d35; --btn-edge:#4a545f; --btn-ink:#d3d9df;
+    --btn-a2:#222831; --btn-b2:#333a44;
+    --tab-a:#333b45; --tab-b:#232931; --tab-ink:#a9b3bd;
+    --thumb:#232931; --thumb-edge:#3d4650;
+    --row-hit:#1c2734; --x-ink:#7d8894; --x-hit:#232931;
+    --title-a:#2f4b6b; --title-b:#22374f; --box-edge:#3d4650;
+    --sel-bg:#2a1a1c; --logo-ink:#e8ecef; --foot-ink:#6d7883;
+    --shadow:rgba(0,0,0,.6); --veil:rgba(0,0,0,.65);
+  }
+}
+/* Eleccion explicita del usuario, gana en los dos sentidos */
+:root[data-theme="dark"]{
+  --page:#171b21; --panel:#10141a;
+  --ink:#dfe4ea; --ink-2:#97a2ad; --ink-3:#7d8894; --ink-4:#8b96a1;
+  --line:#262d36; --edge:#39424d;
+  --link:#7fb2ff; --link-v:#c4a7e7;
+  --red:#cc181e; --red-text:#ff5f5f; --green:#6fbf73;
+  --bar:#1e2c3d; --bar-line:#3a4d64;
+  --field:#0b0e12; --field-edge:#46596e; --field-focus:#6f9fd0;
+  --btn-a:#39414b; --btn-b:#272d35; --btn-edge:#4a545f; --btn-ink:#d3d9df;
+  --btn-a2:#222831; --btn-b2:#333a44;
+  --tab-a:#333b45; --tab-b:#232931; --tab-ink:#a9b3bd;
+  --thumb:#232931; --thumb-edge:#3d4650;
+  --row-hit:#1c2734; --x-ink:#7d8894; --x-hit:#232931;
+  --title-a:#2f4b6b; --title-b:#22374f; --box-edge:#3d4650;
+  --sel-bg:#2a1a1c; --logo-ink:#e8ecef; --foot-ink:#6d7883;
+  --shadow:rgba(0,0,0,.6); --veil:rgba(0,0,0,.65);
+}
+
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{
-  background:#dfe6ec;
+  background:var(--page);
   font:13px/1.4 Arial,Helvetica,sans-serif;
-  color:#000;
+  color:var(--ink);
   padding:8px 8px 24px;
 }
-a{color:#0000cc;text-decoration:underline;cursor:pointer}
-a:visited{color:#551a8b}
+a{color:var(--link);text-decoration:underline;cursor:pointer}
+a:visited{color:var(--link-v)}
 
 .shell{max-width:680px;margin:0 auto}
 
 /* ---- encabezado ---- */
 .top{display:flex;align-items:flex-end;gap:10px;padding:2px 4px 6px}
 .logo{font:italic 900 27px/0.9 Arial,Helvetica,sans-serif;letter-spacing:-1px;white-space:nowrap}
-.logo .a{color:#1b1b1b}
+.logo .a{color:var(--logo-ink)}
 .logo .b{
-  color:#fff;background:#cc181e;border-radius:7px;
+  color:#fff;background:var(--red);border-radius:7px;
   padding:2px 6px 3px;margin-left:2px;display:inline-block
 }
-.topright{margin-left:auto;text-align:right;font-size:11px;color:#555;line-height:1.5}
-.topright a{font-size:11px}
+.topright{margin-left:auto;text-align:right;font-size:11px;color:var(--ink-4);line-height:1.6}
+.topright a{font-size:11px;margin-left:7px}
 
 /* ---- pestanas ---- */
 .tabs{display:flex;gap:2px;overflow-x:auto;white-space:nowrap;
@@ -46,63 +116,66 @@ a:visited{color:#551a8b}
 .tabs::-webkit-scrollbar{display:none}
 .tab{
   font:bold 11px/1 Arial,Helvetica,sans-serif;letter-spacing:.08em;
-  color:#4d4d4d;background:linear-gradient(#fcfcfc,#cfcfcf);
-  border:1px solid #9a9a9a;border-bottom:none;border-radius:6px 6px 0 0;
+  color:var(--tab-ink);background:linear-gradient(var(--tab-a),var(--tab-b));
+  border:1px solid var(--edge);border-bottom:none;border-radius:6px 6px 0 0;
   padding:15px 14px 14px;cursor:pointer;flex:none;text-transform:uppercase
 }
-.tab.on{background:#fff;color:#000;padding-bottom:15px;position:relative;z-index:2}
-.tab.add{font-size:15px;letter-spacing:0;padding:13px 14px 12px;color:#666}
+.tab.on{background:var(--panel);color:var(--ink);padding-bottom:15px;position:relative;z-index:2}
+.tab.add{font-size:15px;letter-spacing:0;padding:13px 14px 12px;color:var(--ink-2)}
 
 /* ---- barra celeste ---- */
 .bluebar{
-  background:#c6d9ef;border:1px solid #9a9a9a;border-radius:0 6px 0 0;
+  background:var(--bar);border:1px solid var(--edge);border-radius:0 6px 0 0;
   padding:10px 12px;margin-top:-1px;position:relative;z-index:1
 }
 .row1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .row1 label{font-weight:bold;font-size:12px}
 input[type=text]{
-  flex:1;min-width:120px;background:#fff;border:1px solid #7f9db9;
-  padding:6px 5px;font:16px Arial,Helvetica,sans-serif;color:#000;border-radius:0
+  flex:1;min-width:120px;background:var(--field);border:1px solid var(--field-edge);
+  padding:6px 5px;font:16px Arial,Helvetica,sans-serif;color:var(--ink);border-radius:0
 }
-input[type=text]:focus{outline:1px solid #4a76a8}
+input[type=text]:focus{outline:1px solid var(--field-focus)}
 button{
-  font:bold 12px Arial,Helvetica,sans-serif;color:#1b1b1b;
-  background:linear-gradient(#fdfdfd,#dcdcdc);border:1px solid #8c8c8c;
+  font:bold 12px Arial,Helvetica,sans-serif;color:var(--btn-ink);
+  background:linear-gradient(var(--btn-a),var(--btn-b));border:1px solid var(--btn-edge);
   border-radius:3px;padding:11px 14px;cursor:pointer
 }
-button:active{background:linear-gradient(#d0d0d0,#e8e8e8)}
+button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .row2{margin-top:8px;font-size:12px;text-align:center;line-height:2}
 select{
-  font:12px Arial,Helvetica,sans-serif;background:#fff;border:1px solid #7f9db9;
-  padding:3px 2px;margin:0 3px;border-radius:0;max-width:46vw
+  font:12px Arial,Helvetica,sans-serif;background:var(--field);color:var(--ink);
+  border:1px solid var(--field-edge);padding:3px 2px;margin:0 3px;border-radius:0;max-width:46vw
 }
 
-/* ---- panel blanco ---- */
+/* ---- panel ---- */
 .panel{
-  background:#fff;border:1px solid #9a9a9a;border-top:none;
+  background:var(--panel);border:1px solid var(--edge);border-top:none;
   border-radius:0 0 12px 12px;padding:14px 12px;min-height:220px
 }
-.crumb{font-size:11px;color:#555;margin:-4px 0 12px}
+.crumb{font-size:11px;color:var(--ink-4);margin:-4px 0 12px}
 
 /* ---- filas de contenido ----
    La fila entera dispara. El texto conserva el aspecto de link chico de 2005,
    pero el area tactil es toda la fila: se usa a oscuras y con una mano. */
 .row{display:flex;gap:10px;padding:11px 4px;margin:0 -4px;
-  border-bottom:1px solid #e2e2e2;align-items:flex-start;cursor:pointer}
+  border-bottom:1px solid var(--line);align-items:flex-start;cursor:pointer}
 .row:last-of-type{border-bottom:none}
-.row:active{background:#eaf1fa}
-.th{width:96px;height:72px;flex:none;border:1px solid #999;background:#ececec;object-fit:cover}
+.row:active{background:var(--row-hit)}
+.th{width:96px;height:72px;flex:none;border:1px solid var(--thumb-edge);
+  background:var(--thumb);object-fit:cover}
 .info{flex:1;min-width:0}
 .ttl{font-size:13px;font-weight:bold;line-height:1.25;margin:0 0 3px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.sub{font-size:11px;color:#666;line-height:1.6}
-.sub b{color:#333}
-.live{color:#cc181e;font-weight:bold}
+.chan{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{font-size:11px;color:var(--ink-2);line-height:1.6}
+.sub b{color:var(--ink-3)}
+.live{color:var(--red-text);font-weight:bold}
+
 /* Deliberadamente chicos: son las acciones secundarias y una es destructiva,
    asi que no compiten con el area de disparo. "eliminar" ademas pide confirmar. */
 .acts{margin-top:5px;font-size:11px}
 .acts a{margin-right:12px;padding:3px 0;display:inline-block}
-.saved{color:#2e7d32;font-size:11px}
+.saved{color:var(--green);font-size:11px}
 
 /* ---- lista guardada: compacta, para ver muchas de un vistazo ----
    Sigue midiendo mas de 50px de alto, que es lo minimo para tocar sin mirar. */
@@ -111,45 +184,45 @@ select{
 .row.compact .ttl{-webkit-line-clamp:1;margin:0 0 1px}
 .row.compact .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   font-size:10.5px;line-height:1.5}
-.x{background:none;border:none;color:#a8a8a8;font-size:19px;line-height:1;
+.x{background:none;border:none;color:var(--x-ink);font-size:19px;line-height:1;
   padding:9px 7px;flex:none;border-radius:3px}
-.x:active{background:#f0f0f0;color:#cc181e}
+.x:active{background:var(--x-hit);color:var(--red-text)}
 
-.empty{color:#777;font-size:12px;text-align:center;padding:46px 14px;line-height:1.7}
-.foot{margin-top:14px;padding-top:10px;border-top:1px solid #e2e2e2;font-size:11px;color:#777}
+.empty{color:var(--ink-3);font-size:12px;text-align:center;padding:46px 14px;line-height:1.7}
+.foot{margin-top:14px;padding-top:10px;border-top:1px solid var(--line);
+  font-size:11px;color:var(--ink-3)}
 /* Pie de pagina, como los del sitio de la epoca */
-.pagefoot{text-align:center;font-size:11px;color:#6b7a86;padding:14px 8px 4px;line-height:2}
+.pagefoot{text-align:center;font-size:11px;color:var(--foot-ink);padding:14px 8px 4px;line-height:2}
 .pagefoot a{margin:0 4px;padding:4px 2px;display:inline-block}
-.loading{text-align:center;padding:44px;color:#777;font-size:12px}
+.loading{text-align:center;padding:44px;color:var(--ink-3);font-size:12px}
 
 /* ---- modal ---- */
-.modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);
+.modal{position:fixed;inset:0;z-index:50;background:var(--veil);
   display:flex;align-items:center;justify-content:center;padding:16px}
 .modal[hidden]{display:none}
-.box{background:#fff;border:1px solid #7a7a7a;max-width:380px;width:100%;
-  box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.box{background:var(--panel);border:1px solid var(--box-edge);max-width:380px;width:100%;
+  box-shadow:0 4px 18px var(--shadow)}
 .box h3{margin:0;font-size:12px;font-weight:bold;color:#fff;letter-spacing:.04em;
-  background:linear-gradient(#5b87b8,#3d6a9c);padding:8px 11px;text-transform:uppercase}
+  background:linear-gradient(var(--title-a),var(--title-b));padding:8px 11px;text-transform:uppercase}
 .box .body{padding:13px}
-.box p{margin:0 0 11px;font-size:12px;color:#333;line-height:1.5}
+.box p{margin:0 0 11px;font-size:12px;color:var(--ink-2);line-height:1.5}
 .pick{display:block;width:100%;text-align:left;margin-bottom:6px;padding:9px 10px;
   font:12px Arial,Helvetica,sans-serif;font-weight:normal}
 .pick b{display:block;font-size:12px;margin-bottom:2px}
-.pick small{color:#666;font-size:11px;line-height:1.4;display:block}
-.pick.sel{border:2px solid #cc181e;background:#fff8f8}
-.pick small{display:block;color:#8a8a8a;font-size:10.5px;margin-top:2px}
-.pick.nueva,.pick.volver{text-align:center;color:#0000cc;background:#fff}
+.pick.sel{border:2px solid var(--red);background:var(--sel-bg)}
+.pick small{display:block;color:var(--ink-3);font-size:10.5px;margin-top:2px}
+.pick.nueva,.pick.volver{text-align:center;color:var(--link);background:var(--panel)}
 .pick.nueva{border-style:dashed}
-.hint{font-size:11px;color:#666;margin:10px 0 6px;font-weight:bold}
+.hint{font-size:11px;color:var(--ink-2);margin:10px 0 6px;font-weight:bold}
 .box .close{width:100%;margin-top:4px}
 
 /* Control segmentado radio / stream, en lugar de dos botones grandes */
-.seg{display:flex;border:1px solid #7f9db9;border-radius:3px;overflow:hidden;margin-bottom:7px}
-.seg button{flex:1;border:none;border-radius:0;padding:11px 6px;font-size:12px;color:#444;
-  background:linear-gradient(#fdfdfd,#e4e4e4)}
-.seg button + button{border-left:1px solid #a8bed2}
-.seg button.on{background:#cc181e;color:#fff;font-weight:bold}
-.box p.segnote{font-size:11px;color:#777;margin:0 0 13px;line-height:1.45}
+.seg{display:flex;border:1px solid var(--field-edge);border-radius:3px;overflow:hidden;margin-bottom:7px}
+.seg button{flex:1;border:none;border-radius:0;padding:11px 6px;font-size:12px;
+  color:var(--tab-ink);background:linear-gradient(var(--tab-a),var(--tab-b))}
+.seg button + button{border-left:1px solid var(--bar-line)}
+.seg button.on{background:var(--red);color:#fff;font-weight:bold}
+.box p.segnote{font-size:11px;color:var(--ink-3);margin:0 0 13px;line-height:1.45}
 
 .newf{display:flex;gap:6px;margin-bottom:6px}
 .newf input{flex:1;min-width:0}
@@ -163,7 +236,7 @@ select{
     <div class="logo"><span class="a">my</span><span class="b">tbe</span></div>
     <div class="topright">
       <span id="quota">0/100 hoy</span><br>
-      <a id="keylink">clave</a>
+      <a id="themelink">modo oscuro</a><a id="keylink">clave</a>
     </div>
   </div>
 
@@ -252,12 +325,12 @@ function bumpQuota(){
   db.quota.count++; save(); renderQuota();
 }
 
-/* Las miniaturas de un vivo mueren con la transmision. */
+/* Las miniaturas de un vivo mueren con la transmision.
+   Sin fondo propio: se apoya en el color de .th, asi sirve en los dos temas. */
 var PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(
   "<svg xmlns='http://www.w3.org/2000/svg' width='96' height='72'>" +
-  "<rect width='96' height='72' fill='#ececec'/>" +
-  "<circle cx='48' cy='36' r='11' fill='none' stroke='#9a9a9a' stroke-width='2'/>" +
-  "<circle cx='48' cy='36' r='3' fill='#9a9a9a'/></svg>");
+  "<circle cx='48' cy='36' r='11' fill='none' stroke='#8a8a8a' stroke-width='2'/>" +
+  "<circle cx='48' cy='36' r='3' fill='#8a8a8a'/></svg>");
 function imgFallback(el){ el.onerror = null; el.src = PLACEHOLDER; }
 
 /* Para una radio guardamos el avatar del canal: el logo de la emisora es
@@ -567,6 +640,41 @@ $('#q').addEventListener('keydown', function(e){
 });
 $('#keylink').onclick = askKey;
 
+/* ============ tema ============
+   Sin eleccion guardada seguimos al sistema. Cuando el usuario elige, su
+   eleccion manda en los dos sentidos, incluso contra lo que diga el sistema. */
+function temaEfectivo(){
+  var t = localStorage.getItem('mytbe.tema');
+  if(t) return t;
+  return (window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+}
+
+function aplicarTema(){
+  var elegido = localStorage.getItem('mytbe.tema');
+  if(elegido) document.documentElement.setAttribute('data-theme', elegido);
+  else        document.documentElement.removeAttribute('data-theme');
+
+  var oscuro = temaEfectivo() === 'dark';
+  $('#themelink').textContent = oscuro ? 'modo claro' : 'modo oscuro';
+  /* Que la barra del navegador y la del sistema acompanen */
+  var m = document.querySelector('meta[name="theme-color"]');
+  if(m) m.setAttribute('content', oscuro ? '#171b21' : '#dfe6ec');
+}
+
+$('#themelink').onclick = function(){
+  localStorage.setItem('mytbe.tema', temaEfectivo() === 'dark' ? 'light' : 'dark');
+  aplicarTema();
+};
+
+/* Si nunca eligio a mano, seguimos al sistema cuando cambia solo */
+if(window.matchMedia){
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  var alCambiar = function(){ if(!localStorage.getItem('mytbe.tema')) aplicarTema(); };
+  if(mq.addEventListener) mq.addEventListener('change', alCambiar);
+  else if(mq.addListener) mq.addListener(alCambiar);
+}
+
 $('#tabs').addEventListener('click', function(e){
   var t = e.target.closest('[data-tab]');
   if(t){ current = t.dataset.tab; results = null; render(); return; }
@@ -704,6 +812,7 @@ if('serviceWorker' in navigator){
   });
 }
 
+aplicarTema();
 renderQuota();
 render();
 </script>
