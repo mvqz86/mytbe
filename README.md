@@ -39,6 +39,21 @@ se veian tres y media.
 Las carpetas siguen siendo una lista plana y cada una recuerda a su madre. Eso
 mantiene simple la fusion entre dispositivos, que empareja por id.
 
+### Vista lista
+
+Una carpeta con subcarpetas puede verse de dos formas, y se acuerda de cual
+elegiste: *vista: carpetas / lista*, en el pie del panel.
+
+En **lista**, todo lo que cuelga de esa carpeta aparece de una sola tirada y
+cada subcarpeta pasa a ser un encabezado, que se queda pegado arriba mientras
+se scrollea. Los grupos se pliegan de a uno con un toque y quedan asi para la
+proxima. Arriba hay un campo para filtrar por titulo o canal —sin tildes y sin
+mayusculas, "clasica" encuentra "Clásica"— que solo mira lo que ya esta
+guardado y no toca internet. Con el filtro puesto los grupos plegados se abren
+solos: si escribiste algo, lo que buscas no puede quedar escondido.
+
+Los elementos sueltos de la propia carpeta van al final, en su propio grupo.
+
 ## Perfiles
 
 Dos personas en un mismo aparato, cada una con sus carpetas y sus recientes.

@@ -89,11 +89,14 @@
 /* Dos colores que faltaban: el azul que reemplaza al rojo en el segmentado
    (el rojo queda solo para EN VIVO y el logo) y el rojo de los botones que
    destruyen algo. Se definen aparte para no repetir las tres paletas. */
-:root{--sel:#3d6a9c; --peligro-a:#d95459; --peligro-b:#b81f26; --peligro-edge:#8f181e}
+:root{--sel:#3d6a9c; --peligro-a:#d95459; --peligro-b:#b81f26; --peligro-edge:#8f181e;
+       --grupo-a:#eef2f6; --grupo-b:#dde5ed}
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){--sel:#3f6da4; --peligro-a:#7d2a2e; --peligro-b:#5d1e21; --peligro-edge:#8c3a3e}
+  :root:not([data-theme="light"]){--sel:#3f6da4; --peligro-a:#7d2a2e; --peligro-b:#5d1e21;
+    --peligro-edge:#8c3a3e; --grupo-a:#232b35; --grupo-b:#1a212a}
 }
-:root[data-theme="dark"]{--sel:#3f6da4; --peligro-a:#7d2a2e; --peligro-b:#5d1e21; --peligro-edge:#8c3a3e}
+:root[data-theme="dark"]{--sel:#3f6da4; --peligro-a:#7d2a2e; --peligro-b:#5d1e21;
+  --peligro-edge:#8c3a3e; --grupo-a:#232b35; --grupo-b:#1a212a}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -218,6 +221,32 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .row.compact .th{width:54px;height:40px}
 .th.icono{display:flex;align-items:center;justify-content:center;font-size:21px;
   background:var(--thumb);border-color:var(--thumb-edge)}
+
+/* ---- vista lista ----
+   La subcarpeta deja de ser un lugar al que se entra y pasa a ser un
+   encabezado. La cabecera se queda pegada arriba mientras se scrollea, que
+   es lo unico que hace legible una lista larga de grupos. */
+.grupo{display:flex;align-items:center;gap:7px;position:sticky;top:0;z-index:4;
+  margin:12px -12px 0;padding:7px 12px;cursor:pointer;
+  background:linear-gradient(var(--grupo-a),var(--grupo-b));
+  border-top:1px solid var(--edge);border-bottom:1px solid var(--edge);
+  font:bold 10.5px Arial,Helvetica,sans-serif;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--tab-ink)}
+.grupo:first-child{margin-top:0}
+.grupo .flecha{font-size:9px;color:var(--ink-3);flex:none}
+.grupo .ruta{color:var(--ink-3);font-weight:normal}
+.grupo .n{margin-left:auto;font-weight:normal;letter-spacing:0;color:var(--ink-3);flex:none}
+.grupo.plegado{color:var(--ink-3)}
+
+/* Mas densa que la vista de carpetas: en una lista larga, la densidad es lo
+   que hace rapido encontrar algo. */
+.row.lista{padding:7px 4px}
+.row.lista .th{width:44px;height:33px}
+.row.lista .ttl{font-size:13.5px;-webkit-line-clamp:1;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;display:block;margin:0 0 1px}
+
+.filtro{display:flex;margin-bottom:10px}
+.filtro input{width:100%;font-size:16px}
 .row.compact .ttl{-webkit-line-clamp:1;margin:0 0 1px}
 .row.compact .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   font-size:10.5px;line-height:1.5}
@@ -576,6 +605,21 @@ function descendientes(id){
   hijas.forEach(function(h){ todo = todo.concat(descendientes(h.id)); });
   return todo;
 }
+/* Los nombres desde la carpeta abierta hasta esa hija, para el encabezado. */
+function rutaRelativa(raizId, id){
+  var nombres = [], empezo = false;
+  rutaDe(id).forEach(function(c){
+    if(empezo) nombres.push(c.name);
+    if(c.id === raizId) empezo = true;
+  });
+  return nombres;
+}
+
+/* Sin tildes y en minuscula: buscar "clasica" tiene que encontrar "Clásica". */
+function pelar(t){
+  return String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function cuentaDe(f){
   var n = f.items.length;
   descendientes(f.id).forEach(function(h){ n += h.items.length; });
@@ -663,9 +707,13 @@ function renderRecientes(){
 }
 
 /* ---- carpeta ---- */
+var filtro = '';    /* lo tipeado en la vista lista */
+
 function renderFolder(){
   var f = carpetaPorId(current) || db.folders[0];
   current = f.id;
+  if(f.vista === 'lista' && hijasDe(f.id).length){ renderLista(f); return; }
+  filtro = '';
   var html = '';
 
   /* Donde estoy parado, y como salir. */
@@ -728,12 +776,107 @@ function renderFolder(){
     html += plural(f.items.length, 'elemento', 'elementos') + ' aca';
     if(hijas.length) html += ' y ' + plural(cuentaDe(f) - f.items.length, 'elemento', 'elementos') + ' adentro';
     html += ' &middot; <a data-nuevasub>subcarpeta nueva</a>';
+    /* Ofrecer la lista solo donde sirve: una carpeta sin hijas no tiene nada
+       que agrupar. */
+    if(hijas.length) html += ' &middot; vista: <a data-vista="lista">lista</a>';
     if(f.items.length > 1)    html += ' &middot; <a data-orden>ordenar</a>';
     if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar carpeta</a>';
   }
   html += '</div>';
 
   $('#panel').innerHTML = html;
+}
+
+/* ---- vista lista ----
+   Todo lo que cuelga de la carpeta en una sola tirada, cada subcarpeta como
+   grupo. Los elementos sueltos de la propia carpeta van al final, para que no
+   queden sepultados entre los grupos. */
+function renderLista(f){
+  if(!f.plegados) f.plegados = {};
+  var buscado = pelar(filtro.trim()), filtrando = !!buscado;
+
+  var html = '';
+  var ruta = rutaDe(f.id);
+  if(ruta.length > 1){
+    html += '<div class="crumb">' +
+      ruta.map(function(c, i){
+        return i === ruta.length - 1 ? '<b>' + esc(c.name) + '</b>'
+                                     : '<a data-sub="' + esc(c.id) + '">' + esc(c.name) + '</a>';
+      }).join(' &rsaquo; ') + '</div>';
+  }
+
+  html += '<div class="filtro"><input type="text" id="filtro" placeholder="filtrar en ' +
+          esc(f.name) + '" autocomplete="off" spellcheck="false" value="' + esc(filtro) + '"></div>';
+
+  function coincide(it){
+    if(!filtrando) return true;
+    return pelar(it.title).indexOf(buscado) > -1 || pelar(it.channel || '').indexOf(buscado) > -1;
+  }
+
+  function fila(it, duena){
+    return '<div class="row compact lista" data-open="' + esc(it.ytId) + '" data-en="' + esc(duena.id) + '">' +
+      '<img class="th" src="' + esc(it.thumb || PLACEHOLDER) + '" alt="" onerror="imgFallback(this)">' +
+      '<div class="info">' +
+        '<p class="ttl">' + esc(it.title) + '</p>' +
+        '<div class="sub">' +
+          (it.kind === 'radio' ? '<span class="live">en vivo</span>' : esc(it.channel)) +
+        '</div>' +
+      '</div>' +
+      '<button class="x" data-rm="' + esc(it.ytId) + '" data-en="' + esc(duena.id) + '" title="Eliminar">&times;</button>' +
+    '</div>';
+  }
+
+  var grupos = 0, mostrados = 0;
+
+  function grupo(nombres, carpeta, items){
+    var hay = items.filter(coincide);
+    /* Filtrando, un grupo sin nada que ver no ocupa lugar. */
+    if(filtrando && !hay.length) return;
+    grupos++;
+    mostrados += hay.length;
+    /* Con filtro puesto los grupos se abren solos: si escribiste algo, lo
+       que buscas no puede estar escondido. */
+    var plegado = !filtrando && !!f.plegados[carpeta.id];
+
+    html += '<div class="grupo' + (plegado ? ' plegado' : '') + '" data-grupo="' + esc(carpeta.id) + '">' +
+      '<span class="flecha">' + (plegado ? '&#9654;' : '&#9660;') + '</span>' +
+      esc(nombres[0]) +
+      (nombres.length > 1 ? ' <span class="ruta">&rsaquo; ' + esc(nombres.slice(1).join(' > ')) + '</span>' : '') +
+      '<span class="n">' + hay.length + '</span></div>';
+
+    if(!plegado) html += hay.map(function(it){ return fila(it, carpeta); }).join('');
+  }
+
+  /* En el mismo orden en que se ven al navegar: madre, despues sus hijas. */
+  (function recorrer(padre){
+    hijasDe(padre).forEach(function(h){
+      grupo(rutaRelativa(f.id, h.id), h, h.items);
+      recorrer(h.id);
+    });
+  })(f.id);
+
+  if(f.items.length) grupo(['Sueltas en ' + f.name], f, f.items);
+
+  if(filtrando && !mostrados){
+    html += '<div class="empty">Nada con <b>' + esc(filtro.trim()) + '</b> en ' + esc(f.name) + '.</div>';
+  }
+
+  html += '<div class="foot">' +
+    (filtrando ? plural(mostrados, 'elemento', 'elementos') + ' con ese texto'
+               : plural(cuentaDe(f), 'elemento', 'elementos') + ' en ' + plural(grupos, 'grupo', 'grupos')) +
+    ' &middot; <a data-nuevasub>subcarpeta nueva</a>' +
+    ' &middot; vista: <a data-vista="carpetas">carpetas</a>' +
+    '</div>';
+
+  $('#panel').innerHTML = html;
+}
+
+/* Re-dibujar el panel se lleva puesto el foco del campo: hay que devolverlo
+   con el cursor donde estaba, o no se puede escribir de corrido. */
+function refiltrar(){
+  renderLista(carpetaPorId(current));
+  var i = $('#filtro');
+  if(i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
 }
 
 /* ---- resultados ---- */
@@ -1213,7 +1356,9 @@ $('#panel').addEventListener('click', function(e){
   if((a = e.target.closest('[data-save]'))){ askSave(+a.dataset.save); return; }
   if((a = e.target.closest('[data-back]'))){ results = null; render(); return; }
   if((a = e.target.closest('[data-rm]'))){
-    var fr = db.folders.filter(function(x){ return x.id === current; })[0];
+    /* En la vista lista las filas vienen de varias carpetas, asi que cada una
+       dice de cual. */
+    var fr = carpetaPorId(a.dataset.en || current);
     var item = fr.items.filter(function(i){ return i.ytId === a.dataset.rm; })[0];
     var id = a.dataset.rm;
     confirmar('Eliminar', 'Se saca <b>' + esc(item.title) + '</b> de esta carpeta.', 'Eliminar',
@@ -1247,6 +1392,23 @@ $('#panel').addEventListener('click', function(e){
 
   /* Ordenar y traer mas van antes del disparo: viven dentro de la fila y
      closest() las taparia. */
+  if((a = e.target.closest('[data-grupo]'))){
+    var fg = carpetaPorId(current);
+    if(!fg.plegados) fg.plegados = {};
+    fg.plegados[a.dataset.grupo] = !fg.plegados[a.dataset.grupo];
+    save();
+    renderLista(fg);
+    return;
+  }
+  if((a = e.target.closest('[data-vista]'))){
+    var fv = carpetaPorId(current);
+    fv.vista = a.dataset.vista;
+    filtro = '';
+    save();
+    render();
+    window.scrollTo(0, 0);
+    return;
+  }
   if((a = e.target.closest('[data-sub]'))){
     current = a.dataset.sub; results = null; modoOrden = false; render();
     window.scrollTo(0, 0);
@@ -1286,7 +1448,7 @@ $('#panel').addEventListener('click', function(e){
     return;
   }
   if((a = e.target.closest('[data-open]'))){
-    var fo = db.folders.filter(function(x){ return x.id === current; })[0];
+    var fo = carpetaPorId(a.dataset.en || current);
     launch(fo.items.filter(function(i){ return i.ytId === a.dataset.open; })[0]);
   }
 });
@@ -1433,6 +1595,8 @@ function unirCarpeta(x, y){
   return {
     id: x.id,
     padre:      x.padre || y.padre || null,
+    vista:      x.vista || y.vista || null,
+    plegados:   x.plegados || y.plegados || {},
     name:       (y.nombreEn || 0) > (x.nombreEn || 0) ? y.name : x.name,
     nombreEn:   Math.max(x.nombreEn || 0, y.nombreEn || 0),
     creadaEn:   Math.max(x.creadaEn || 0, y.creadaEn || 0),
@@ -2120,6 +2284,13 @@ if('serviceWorker' in navigator){
 function estadoRed(){ $('#cinta').hidden = navigator.onLine; }
 window.addEventListener('online',  estadoRed);
 window.addEventListener('offline', estadoRed);
+
+/* El filtro no pasa por render(): redibuja solo el panel y devuelve el foco. */
+$('#panel').addEventListener('input', function(e){
+  if(e.target.id !== 'filtro') return;
+  filtro = e.target.value;
+  refiltrar();
+});
 
 $('#tabs').addEventListener('scroll', sombrasTabs);
 window.addEventListener('resize', sombrasTabs);
