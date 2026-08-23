@@ -162,11 +162,12 @@ button{
   border-radius:3px;padding:11px 14px;cursor:pointer
 }
 button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
-.row2{margin-top:8px;font-size:12px;text-align:center;line-height:2}
-select{
-  font:12px Arial,Helvetica,sans-serif;background:var(--field);color:var(--ink);
-  border:1px solid var(--field-edge);padding:3px 2px;margin:0 3px;border-radius:0;max-width:46vw
-}
+.row2{margin-top:6px;text-align:center}
+/* Un tilde en lugar de dos desplegables: era el unico filtro que se usaba,
+   y elegir en un <select> chico con el pulgar es una pelea. */
+.check{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;min-height:44px;
+  font-size:12.5px;color:var(--ink);cursor:pointer}
+.check input{width:16px;height:16px;margin:0;accent-color:var(--sel)}
 
 /* ---- panel ---- */
 .panel{
@@ -302,16 +303,7 @@ select{
       <button id="go">Buscar</button>
     </div>
     <div class="row2">
-      Quiero
-      <select id="f-live">
-        <option value="">cualquier video</option>
-        <option value="live">solo en vivo</option>
-      </select>
-      que dure
-      <select id="f-long">
-        <option value="">lo que sea</option>
-        <option value="long">mas de 20 min</option>
-      </select>
+      <label class="check"><input type="checkbox" id="f-live"> solo lo que este en vivo ahora</label>
     </div>
   </div>
 
@@ -713,13 +705,11 @@ function doSearch(token){
   if(boton){ boton.disabled = true; boton.textContent = 'buscando...'; }
   else $('#panel').innerHTML = '<div class="loading">Buscando&hellip;</div>';
 
-  var liveOnly = token ? results.liveOnly : $('#f-live').value === 'live';
-  var largo    = token ? results.largo    : $('#f-long').value === 'long';
+  var liveOnly = token ? results.liveOnly : $('#f-live').checked;
 
   /* 50 es el maximo que permite la API y cuesta lo mismo que pedir 25. */
   var p = new URLSearchParams({key:getKey(), part:'snippet', q:q, type:'video', maxResults:'50'});
   if(liveOnly) p.set('eventType','live');
-  if(largo)    p.set('videoDuration','long');
   if(token)    p.set('pageToken', token);
 
   fetch('https://www.googleapis.com/youtube/v3/search?' + p.toString())
@@ -757,8 +747,7 @@ function doSearch(token){
         return;
       }
 
-      results = {q:q, items:items, next:data.nextPageToken || '',
-                 liveOnly:liveOnly, largo:largo};
+      results = {q:q, items:items, next:data.nextPageToken || '', liveOnly:liveOnly};
       render();
       window.scrollTo(0,0);
     })
