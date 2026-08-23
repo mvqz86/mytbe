@@ -24,6 +24,21 @@ Lo que disparas queda anotado tres dias en la pestana **Recientes**, con su
 miniatura y su hora. Es para volver a algo que pusiste ayer y no llegaste a
 guardar, sin gastar otra busqueda. De un vivo se anota el canal, no el video.
 
+## Carpetas y subcarpetas
+
+Las pestanas de arriba son las carpetas de primer nivel. Adentro de cualquiera
+se pueden crear subcarpetas —*subcarpeta nueva*, en el pie del panel— y
+anidarlas cuanto haga falta. Las subcarpetas aparecen como filas con carpetita
+al principio de la lista, con la cuenta de todo lo que llevan adentro, y un
+rastro de migas arriba para volver.
+
+Las de adentro no se suman a las pestanas: es lo que evita que la fila de
+arriba crezca hasta que no se pueda leer. Con doce carpetas en una tablet solo
+se veian tres y media.
+
+Las carpetas siguen siendo una lista plana y cada una recuerda a su madre. Eso
+mantiene simple la fusion entre dispositivos, que empareja por id.
+
 ## Perfiles
 
 Dos personas en un mismo aparato, cada una con sus carpetas y sus recientes.

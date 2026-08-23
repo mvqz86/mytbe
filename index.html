@@ -216,6 +216,8 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
    Sigue midiendo mas de 50px de alto, que es lo minimo para tocar sin mirar. */
 .row.compact{padding:6px 4px;align-items:center;gap:9px}
 .row.compact .th{width:54px;height:40px}
+.th.icono{display:flex;align-items:center;justify-content:center;font-size:21px;
+  background:var(--thumb);border-color:var(--thumb-edge)}
 .row.compact .ttl{-webkit-line-clamp:1;margin:0 0 1px}
 .row.compact .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   font-size:10.5px;line-height:1.5}
@@ -263,8 +265,17 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .modal{position:fixed;inset:0;z-index:50;background:var(--veil);
   display:flex;align-items:center;justify-content:center;padding:16px}
 .modal[hidden]{display:none}
+/* Con doce carpetas el cuadro de guardar medía mas que la pantalla y el boton
+   de cancelar quedaba afuera, sin forma de llegar. Ahora el titulo se queda
+   fijo y lo de adentro se desliza. */
 .box{background:var(--panel);border:1px solid var(--box-edge);max-width:380px;width:100%;
-  box-shadow:0 4px 18px var(--shadow)}
+  box-shadow:0 4px 18px var(--shadow);
+  max-height:calc(100vh - 32px);display:flex;flex-direction:column}
+.box h3{flex:none}
+.box .body{overflow-y:auto;min-height:0}
+/* Y la lista de carpetas se desliza sola, para que los botones de abajo
+   queden siempre a la vista. */
+#carpetas{max-height:42vh;overflow-y:auto;margin-bottom:4px}
 .box h3{margin:0;font-size:12px;font-weight:bold;color:#fff;letter-spacing:.04em;
   background:linear-gradient(var(--title-a),var(--title-b));padding:8px 11px;text-transform:uppercase}
 .box .body{padding:13px}
@@ -537,6 +548,40 @@ function launch(item, anotar){
   else window.open(url, '_blank', 'noopener');
 }
 
+/* ============ arbol de carpetas ============
+   Las carpetas siguen siendo una lista plana y cada una recuerda a su madre.
+   Anidarlas de verdad complicaria la fusion entre dispositivos, que trabaja
+   emparejando por id, y no daria nada a cambio. */
+function hijasDe(id){
+  return db.folders.filter(function(f){ return (f.padre || null) === (id || null); });
+}
+function carpetaPorId(id){
+  return db.folders.filter(function(f){ return f.id === id; })[0] || null;
+}
+/* La rama de arriba de todo, que es la que se pinta como pestana. */
+function raizDe(id){
+  var f = carpetaPorId(id), guarda = 0;
+  while(f && f.padre && guarda++ < 20) f = carpetaPorId(f.padre);
+  return f ? f.id : (db.folders[0] && db.folders[0].id);
+}
+/* Desde la raiz hasta ella, para el rastro de migas. */
+function rutaDe(id){
+  var f = carpetaPorId(id), ruta = [], guarda = 0;
+  while(f && guarda++ < 20){ ruta.unshift(f); f = f.padre ? carpetaPorId(f.padre) : null; }
+  return ruta;
+}
+/* Todo lo que cuelga de ella, a cualquier profundidad. */
+function descendientes(id){
+  var hijas = hijasDe(id), todo = hijas.slice();
+  hijas.forEach(function(h){ todo = todo.concat(descendientes(h.id)); });
+  return todo;
+}
+function cuentaDe(f){
+  var n = f.items.length;
+  descendientes(f.id).forEach(function(h){ n += h.items.length; });
+  return n;
+}
+
 /* Nombre de la carpeta donde ya esta guardado ese id, o null. */
 function carpetaDe(ytId){
   if(!ytId) return null;
@@ -553,8 +598,11 @@ var results = null;               /* si hay busqueda activa */
 var modoOrden = false;            /* la lista guardada se esta reordenando */
 
 function renderTabs(){
-  $('#tabs').innerHTML = db.folders.map(function(f){
-    return '<button class="tab' + (!results && f.id === current ? ' on' : '') +
+  /* Solo las de primer nivel: las de adentro se ven al entrar, y asi la fila
+     no crece hasta volverse ilegible. */
+  var raiz = raizDe(current);
+  $('#tabs').innerHTML = hijasDe(null).map(function(f){
+    return '<button class="tab' + (!results && f.id === raiz ? ' on' : '') +
            '" data-tab="' + esc(f.id) + '">' + esc(f.name) + '</button>';
   }).join('') +
     '<button class="tab' + (!results && current === RECIENTES ? ' on' : '') +
@@ -616,17 +664,42 @@ function renderRecientes(){
 
 /* ---- carpeta ---- */
 function renderFolder(){
-  var f = db.folders.filter(function(x){ return x.id === current; })[0] || db.folders[0];
+  var f = carpetaPorId(current) || db.folders[0];
   current = f.id;
   var html = '';
 
-  if(!f.items.length){
+  /* Donde estoy parado, y como salir. */
+  var ruta = rutaDe(f.id);
+  if(ruta.length > 1){
+    html += '<div class="crumb">' +
+      ruta.map(function(c, i){
+        return i === ruta.length - 1
+          ? '<b>' + esc(c.name) + '</b>'
+          : '<a data-sub="' + esc(c.id) + '">' + esc(c.name) + '</a>';
+      }).join(' &rsaquo; ') + '</div>';
+  }
+
+  /* Las subcarpetas van primero: son el camino, no el contenido. */
+  var hijas = hijasDe(f.id);
+  if(hijas.length){
+    html += hijas.map(function(h){
+      return '<div class="row compact" data-sub="' + esc(h.id) + '">' +
+        '<div class="th icono">&#128193;</div>' +
+        '<div class="info">' +
+          '<p class="ttl">' + esc(h.name) + '</p>' +
+          '<div class="sub">' + plural(cuentaDe(h), 'elemento', 'elementos') + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  if(!f.items.length && !hijas.length){
     modoOrden = false;
-    html = '<div class="empty">Esta carpeta esta vacia.<br>' +
-           'Busca algo arriba y toca <b>+</b> en el resultado.</div>';
-  } else {
+    html += '<div class="empty">Esta carpeta esta vacia.<br>' +
+            'Busca algo arriba y toca <b>+</b> en el resultado.</div>';
+  } else if(f.items.length) {
     var ultimo = f.items.length - 1;
-    html = f.items.map(function(it, i){
+    html += f.items.map(function(it, i){
       /* Mientras se ordena la fila deja de disparar: mover una radio no puede
          terminar en YouTube por un toque de mas. */
       return '<div class="row compact' + (modoOrden ? ' ordenando' : '') + '"' +
@@ -652,7 +725,9 @@ function renderFolder(){
   if(modoOrden){
     html += 'Move cada uno con las flechas &middot; <a data-orden>listo</a>';
   } else {
-    html += plural(f.items.length, 'elemento', 'elementos') + ' en esta carpeta';
+    html += plural(f.items.length, 'elemento', 'elementos') + ' aca';
+    if(hijas.length) html += ' y ' + plural(cuentaDe(f) - f.items.length, 'elemento', 'elementos') + ' adentro';
+    html += ' &middot; <a data-nuevasub>subcarpeta nueva</a>';
     if(f.items.length > 1)    html += ' &middot; <a data-orden>ordenar</a>';
     if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar carpeta</a>';
   }
@@ -843,11 +918,18 @@ function askGuardar(base){
   };
 
   function listaCarpetas(){
-    return db.folders.map(function(f){
-      return '<button class="pick" data-folder="' + esc(f.id) + '">' + esc(f.name) +
-             '<small>' + plural(f.items.length, 'elemento', 'elementos') + '</small></button>';
-    }).join('') +
-    '<button class="pick nueva" data-nueva>+ carpeta nueva</button>';
+    var html = '';
+    /* Sangradas, para que se vea de quien cuelga cada una. */
+    (function nivel(padre, prof){
+      hijasDe(padre).forEach(function(f){
+        html += '<button class="pick" data-folder="' + esc(f.id) + '"' +
+                (prof ? ' style="padding-left:' + (10 + prof * 15) + 'px"' : '') + '>' +
+                (prof ? '&rsaquo; ' : '') + esc(f.name) +
+                '<small>' + plural(f.items.length, 'elemento', 'elementos') + '</small></button>';
+        nivel(f.id, prof + 1);
+      });
+    })(null, 0);
+    return html + '<button class="pick nueva" data-nueva>+ carpeta nueva</button>';
   }
 
   function panelNueva(){
@@ -1090,20 +1172,23 @@ $('#tabs').addEventListener('click', function(e){
 /* ============ carpeta nueva ============
    Con prompt() el dialogo del sistema queda feo dentro de la app instalada,
    asi que usamos el mismo cuadro que el resto. */
-function askNewFolder(){
+function askNewFolder(padre){
   function crear(){
     var n = $('#nf2').value.trim();
     if(!n){ $('#nf2').focus(); return; }
-    var f = {id:'f' + Date.now(), name:n, items:[], creadaEn:Date.now(), nombreEn:Date.now()};
+    var f = {id:'f' + Date.now(), name:n, items:[], padre:padre || null,
+             creadaEn:Date.now(), nombreEn:Date.now()};
     db.folders.push(f);
     save();
     closeModal();
     current = f.id; results = null; render();
   }
 
+  var madre = padre ? carpetaPorId(padre) : null;
   openModal(
-    '<h3>Carpeta nueva</h3><div class="body">' +
-      '<p>Como se va a llamar?</p>' +
+    '<h3>' + (madre ? 'Subcarpeta nueva' : 'Carpeta nueva') + '</h3><div class="body">' +
+      '<p>' + (madre ? 'Adentro de <b>' + esc(madre.name) + '</b>. Como se llama?'
+                     : 'Como se va a llamar?') + '</p>' +
       '<div class="newf">' +
         '<input type="text" id="nf2" placeholder="Ej: podcasts" maxlength="30" autocomplete="off">' +
         '<button data-crear2>Crear</button>' +
@@ -1140,21 +1225,34 @@ $('#panel').addEventListener('click', function(e){
     return;
   }
   if(e.target.closest('[data-delfolder]')){
-    var fd = db.folders.filter(function(x){ return x.id === current; })[0];
+    var fd = carpetaPorId(current);
+    var dentro = descendientes(fd.id);
     confirmar('Borrar carpeta',
       'Se borra <b>' + esc(fd.name) + '</b>' +
-      (fd.items.length ? ' con sus ' + plural(fd.items.length, 'elemento', 'elementos') : '') + '.',
+      (dentro.length ? ' con sus ' + plural(dentro.length, 'subcarpeta', 'subcarpetas') : '') +
+      (cuentaDe(fd) ? ' y ' + plural(cuentaDe(fd), 'elemento', 'elementos') : '') + '.',
       'Borrar',
       function(){
-        db.folders = db.folders.filter(function(x){ return x.id !== fd.id; });
-        db.borrados[fd.id] = Date.now();
-        current = db.folders[0].id; modoOrden = false; save(); render();
+        var fuera = {};
+        fuera[fd.id] = 1;
+        dentro.forEach(function(h){ fuera[h.id] = 1; });
+        db.folders = db.folders.filter(function(x){ return !fuera[x.id]; });
+        for(var id in fuera) db.borrados[id] = Date.now();
+        /* Al volver, la madre si existe; si no, la primera de arriba. */
+        current = (fd.padre && carpetaPorId(fd.padre)) ? fd.padre : hijasDe(null)[0].id;
+        modoOrden = false; save(); render();
       });
     return;
   }
 
   /* Ordenar y traer mas van antes del disparo: viven dentro de la fila y
      closest() las taparia. */
+  if((a = e.target.closest('[data-sub]'))){
+    current = a.dataset.sub; results = null; modoOrden = false; render();
+    window.scrollTo(0, 0);
+    return;
+  }
+  if(e.target.closest('[data-nuevasub]')){ askNewFolder(current); return; }
   if((a = e.target.closest('[data-guardar]'))){
     askGuardar(deReciente(db.reproducidos[+a.dataset.guardar])); return;
   }
@@ -1334,6 +1432,7 @@ function unirCarpeta(x, y){
 
   return {
     id: x.id,
+    padre:      x.padre || y.padre || null,
     name:       (y.nombreEn || 0) > (x.nombreEn || 0) ? y.name : x.name,
     nombreEn:   Math.max(x.nombreEn || 0, y.nombreEn || 0),
     creadaEn:   Math.max(x.creadaEn || 0, y.creadaEn || 0),
