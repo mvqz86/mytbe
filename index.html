@@ -2991,6 +2991,9 @@ function askConfig(){
       '<button class="close" data-bajar>Descargar copia</button>' +
       '<button class="close" data-subir>Restaurar copia</button>' +
 
+      '<div class="hint">Almacenamiento</div>' +
+      '<p class="segnote" id="cfgalm">Averiguando&hellip;</p>' +
+
       '<div class="hint">Al disparar</div>' +
       '<p class="segnote">A que app se le entrega lo que tocas. YouTube Music aparece ' +
       'en Android Auto con el tema en pantalla; YouTube no. Ojo: no todo video existe ' +
@@ -3021,6 +3024,21 @@ function askConfig(){
       if(e.target.closest('[data-sync]')){ closeModal(); askSync(); return; }
       if(e.target.closest('[data-cancel]')) closeModal();
     });
+
+  /* Si el navegador no lo marco como permanente, puede barrer la clave y las
+     carpetas cuando se le antoje. Saberlo evita buscar el problema en la app. */
+  var alm = $('#cfgalm');
+  if(!navigator.storage || !navigator.storage.persisted){
+    alm.textContent = 'Este navegador no dice si guarda de forma permanente.';
+  } else {
+    navigator.storage.persisted().then(function(si){
+      alm.innerHTML = si
+        ? 'Permanente: el navegador se comprometio a no borrar esto solo.'
+        : '<b>No es permanente.</b> El navegador puede borrar la clave y las carpetas ' +
+          'cuando quiera, y eso explica tener que cargarlas de nuevo. Suele ser la opcion ' +
+          'de borrar datos al salir, en la configuracion del navegador.';
+    });
+  }
 }
 
 /* ============ instalable ============
