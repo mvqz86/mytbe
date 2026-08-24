@@ -2805,6 +2805,7 @@ function entrar(perfil, llave){
     contarSync();
     renderQuota();
     render();
+    if(vueltaDeGoogle){ vueltaDeGoogle = false; retomarPendiente(); }
     if(haySync()) setTimeout(function(){ sincronizar(); }, 800);
   });
 }
@@ -3103,47 +3104,55 @@ function clienteOauth(){ return localStorage.getItem(OA) || ''; }
    a Google sin encontrar el cliente. */
 function limpiarCliente(t){ return String(t || '').replace(/[^A-Za-z0-9._-]/g, ''); }
 
-/* La biblioteca de Google se carga recien cuando hace falta: no tiene por que
-   pesar en cada apertura de la app. */
-function cargarGoogle(){
-  if(window.google && window.google.accounts) return Promise.resolve();
-  return new Promise(function(ok, mal){
-    var sc = document.createElement('script');
-    sc.src = 'https://accounts.google.com/gsi/client';
-    sc.onload = function(){ ok(); };
-    sc.onerror = function(){ mal(new Error('No se pudo cargar el permiso de Google.')); };
-    document.head.appendChild(sc);
-  });
+/* El permiso por REDIRECCION, no por ventana emergente.
+
+   La emergente es lo que usa la biblioteca de Google, y Android la bloquea
+   dentro de una app instalada: de ahi que anduviera en la compu y no en el
+   telefono. Yendo y volviendo de accounts.google.com no hay ventana que
+   bloquear, y ademas se cae una dependencia externa.
+
+   Como la pagina se va, hay que anotar que estabamos por hacer para retomarlo
+   al volver. */
+var PEND = 'mytbe.pendiente', ESTADO = 'mytbe.estado';
+
+function volverA(){
+  return location.origin + location.pathname.replace(/index\.html$/, '');
 }
 
-function pedirPermiso(){
-  tokenYT = tokenYT || tokenGuardado();
-  if(tokenYT) return Promise.resolve(tokenYT);
-  if(!clienteOauth()) return Promise.reject(new Error('sin-cliente'));
+function irAPedirPermiso(){
+  var nonce = String(Date.now()) + Math.random().toString(36).slice(2);
+  localStorage.setItem(ESTADO, nonce);
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth' +
+    '?client_id=' + encodeURIComponent(clienteOauth()) +
+    '&redirect_uri=' + encodeURIComponent(volverA()) +
+    '&response_type=token' +
+    '&scope=' + encodeURIComponent('https://www.googleapis.com/auth/youtube') +
+    '&include_granted_scopes=true' +
+    '&state=' + encodeURIComponent(nonce);
+}
 
-  return cargarGoogle().then(function(){
-    return new Promise(function(ok, mal){
-      var callado = true;
-      var c = google.accounts.oauth2.initTokenClient({
-        client_id: clienteOauth(),
-        scope: 'https://www.googleapis.com/auth/youtube',
-        callback: function(r){
-          if(r && r.access_token){
-            tokenYT = r.access_token;
-            guardarToken(r.access_token, r.expires_in || 3600);
-            ok(tokenYT);
-          } else mal(new Error('No diste el permiso.'));
-        },
-        error_callback: function(){
-          /* Primero se intenta sin molestar; si Google necesita preguntar,
-             recien ahi aparece el selector de cuenta. */
-          if(callado){ callado = false; c.requestAccessToken(); return; }
-          mal(new Error('No diste el permiso.'));
-        }
-      });
-      c.requestAccessToken({prompt:''});
-    });
-  });
+/* Al volver, Google deja el permiso en el pedacito de la direccion. */
+function volviendoDeGoogle(){
+  var h = location.hash || '';
+  if(h.indexOf('access_token=') < 0) return false;
+
+  function saca(n){
+    var m = new RegExp('[#&]' + n + '=([^&]*)').exec(h);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  var ok = saca('state') === localStorage.getItem(ESTADO);
+  if(ok){
+    tokenYT = saca('access_token');
+    guardarToken(tokenYT, +saca('expires_in') || 3600);
+  }
+  localStorage.removeItem(ESTADO);
+  if(history.replaceState) history.replaceState(null, '', volverA());
+  return ok;
+}
+
+function hayPermiso(){
+  tokenYT = tokenYT || tokenGuardado();
+  return !!tokenYT;
 }
 
 function apiYT(ruta, opciones){
@@ -3230,14 +3239,24 @@ function contar(txt){
 /* El gesto: tocar una lista guardada con el destino en Music la deja igual
    alla y la abre. Si nunca se mando, la crea. */
 function aYouTubeMusic(item, duena){
+  if(!clienteOauth()){ askOauth(); return; }
+
+  /* Sin permiso, la pagina se va a Google y vuelve: dejamos anotado que
+     estabamos por mandar esta lista. */
+  if(!hayPermiso()){
+    localStorage.setItem(PEND, JSON.stringify({carpeta: duena.id, item: item.ytId}));
+    irAPedirPermiso();
+    return;
+  }
+
   openModal('<h3>YouTube Music</h3><div class="body">' +
-    '<p class="segnote" id="ytmsg">Pidiendo permiso a Google&hellip;</p>' +
+    '<p class="segnote" id="ytmsg">Preparando&hellip;</p>' +
     '<button class="close" data-cancel>Cerrar</button></div>',
     function(e){ if(e.target.closest('[data-cancel]')) closeModal(); });
 
   var recienCreada = false;
 
-  pedirPermiso()
+  Promise.resolve()
     .then(function(){
       if(item.listaYT) return item.listaYT;
       contar('Creando <b>' + esc(item.title) + '</b> en tu cuenta&hellip;');
@@ -3288,7 +3307,6 @@ function aYouTubeMusic(item, duena){
     })
     .catch(function(err){
       if(err.message === 'parcial') return;
-      if(err.message === 'sin-cliente'){ closeModal(); askOauth(); return; }
       if(err.status === 401){
         /* Vencido o revocado: se tira y la proxima se vuelve a pedir. */
         olvidarToken();
@@ -3313,9 +3331,9 @@ function askOauth(){
     '<h3>Permiso de YouTube</h3><div class="body">' +
       '<p>Para crear listas en tu cuenta, mytbe necesita un <b>ID de cliente OAuth</b>. ' +
       'Se saca del mismo proyecto de Google Cloud donde sacaste la clave.</p>' +
-      '<p class="segnote">Credenciales &rarr; Crear credenciales &rarr; ID de cliente de OAuth &rarr; ' +
-      'Aplicacion web. En <b>Origenes de JavaScript autorizados</b> va: ' +
-      esc(location.origin) + '</p>' +
+      '<p class="segnote">En el cliente de Google Cloud tienen que estar los dos:<br>' +
+      '<b>Origenes de JavaScript autorizados</b>: ' + esc(location.origin) + '<br>' +
+      '<b>URI de redireccionamiento autorizados</b>: ' + esc(volverA()) + '</p>' +
       '<input type="text" id="oain" placeholder="....apps.googleusercontent.com" ' +
       'autocomplete="off" spellcheck="false" style="width:100%;margin-bottom:10px" value="' +
       esc(clienteOauth()) + '">' +
@@ -3341,6 +3359,18 @@ function askOauth(){
     });
 
   $('#oain').focus();
+}
+
+/* Lo que quedo a medias cuando la pagina se fue a pedir permiso. */
+function retomarPendiente(){
+  var x;
+  try { x = JSON.parse(localStorage.getItem(PEND) || 'null'); } catch(e){ x = null; }
+  localStorage.removeItem(PEND);
+  if(!x) return;
+
+  var c = carpetaPorId(x.carpeta);
+  var it = c && c.items.filter(function(i){ return i.ytId === x.item; })[0];
+  if(it) setTimeout(function(){ aYouTubeMusic(it, c); }, 300);
 }
 
 /* ============ instalable ============
@@ -3460,6 +3490,10 @@ estadoRed();
 
 /* Lo ultimo: pintar depende de que haya un perfil abierto, y abrirlo puede
    necesitar una contrasena. Lo que sigue lo hace entrar(). */
+/* Antes que nada: si venimos de Google, guardar el permiso y sacarlo de la
+   direccion, para que el resto arranque como siempre. */
+var vueltaDeGoogle = volviendoDeGoogle();
+
 arrancar();
 </script>
 </body>

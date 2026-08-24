@@ -166,8 +166,16 @@ como playlist **privada**; si cambio, manda solo la diferencia.
 
 Necesita un **ID de cliente OAuth** del mismo proyecto de Google Cloud donde
 sale la clave: Credenciales -> Crear credenciales -> ID de cliente de OAuth ->
-Aplicacion web, con `https://mvqz86.github.io` en los origenes autorizados. Se
-pega una vez desde el engranaje.
+Aplicacion web. El cliente tiene que tener las dos cosas:
+
+- **Origenes de JavaScript autorizados**: `https://mvqz86.github.io`
+- **URI de redireccionamiento autorizados**: `https://mvqz86.github.io/mytbe/`
+
+El permiso se pide por **redireccion**, no por ventana emergente: la pagina se
+va a Google y vuelve con el permiso en la direccion. La emergente es lo que usa
+la biblioteca de Google y Android la bloquea dentro de una app instalada, que
+es por lo que andaba en la compu y no en el telefono. De paso, la app dejo de
+depender de un script externo.
 
 ## Sincronizacion entre dispositivos
 
