@@ -3199,19 +3199,24 @@ function aYouTubeMusic(item, duena){
     '<button class="close" data-cancel>Cerrar</button></div>',
     function(e){ if(e.target.closest('[data-cancel]')) closeModal(); });
 
+  var recienCreada = false;
+
   pedirPermiso()
     .then(function(){
       if(item.listaYT) return item.listaYT;
       contar('Creando <b>' + esc(item.title) + '</b> en tu cuenta&hellip;');
       return crearListaYT(item.title).then(function(id){
         item.listaYT = id;
+        recienCreada = true;
         save();
         return id;
       });
     })
     .then(function(lista){
-      contar('Viendo que le falta&hellip;');
-      return leerListaYT(lista).then(function(alla){
+      /* Recien creada esta vacia por definicion, y preguntarle a la API justo
+         despues de crearla devuelve 404: tarda un instante en existir. */
+      contar(recienCreada ? 'Cargando los temas&hellip;' : 'Viendo que le falta&hellip;');
+      return (recienCreada ? Promise.resolve({}) : leerListaYT(lista)).then(function(alla){
         var aca = (item.ytIds || []).slice(0, TOPE_LISTA);
         var faltan = aca.filter(function(v){ return !alla[v]; });
         var sobran = Object.keys(alla).filter(function(v){ return aca.indexOf(v) < 0; });
