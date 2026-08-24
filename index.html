@@ -2806,6 +2806,7 @@ function entrar(perfil, llave){
     renderQuota();
     render();
     if(vueltaDeGoogle){ vueltaDeGoogle = false; retomarPendiente(); }
+    else if(quejaDeGoogle) setTimeout(contarQueja, 300);
     if(haySync()) setTimeout(function(){ sincronizar(); }, 800);
   });
 }
@@ -3131,15 +3132,28 @@ function irAPedirPermiso(){
     '&state=' + encodeURIComponent(nonce);
 }
 
-/* Al volver, Google deja el permiso en el pedacito de la direccion. */
+/* Al volver, Google deja el permiso —o el motivo del rechazo— en la
+   direccion. Sin mirar el rechazo, un error se ve como que no paso nada. */
+var quejaDeGoogle = '';
+
 function volviendoDeGoogle(){
-  var h = location.hash || '';
-  if(h.indexOf('access_token=') < 0) return false;
+  var h = (location.hash || '') + '&' + (location.search || '').slice(1);
 
   function saca(n){
-    var m = new RegExp('[#&]' + n + '=([^&]*)').exec(h);
-    return m ? decodeURIComponent(m[1]) : '';
+    var m = new RegExp('[#&?]' + n + '=([^&]*)').exec(h);
+    return m ? decodeURIComponent(m[1]).replace(/\+/g, ' ') : '';
   }
+
+  var falla = saca('error');
+  if(falla){
+    quejaDeGoogle = falla + (saca('error_description') ? ': ' + saca('error_description') : '');
+    localStorage.removeItem(ESTADO);
+    localStorage.removeItem(PEND);
+    if(history.replaceState) history.replaceState(null, '', volverA());
+    return false;
+  }
+
+  if(h.indexOf('access_token=') < 0) return false;
   var ok = saca('state') === localStorage.getItem(ESTADO);
   if(ok){
     tokenYT = saca('access_token');
@@ -3359,6 +3373,19 @@ function askOauth(){
     });
 
   $('#oain').focus();
+}
+
+/* Si Google rechazo el permiso hay que decirlo con el motivo y con la
+   direccion exacta que espera, que es lo que casi siempre falta. */
+function contarQueja(){
+  var q = quejaDeGoogle;
+  quejaDeGoogle = '';
+  avisar('Google rechazo el permiso',
+    '<b>' + esc(q) + '</b>' +
+    (q.indexOf('redirect_uri') > -1
+      ? '<br><br>En Google Cloud, en tu cliente <b>mytbe</b>, agrega esto en ' +
+        '<b>URI de redireccionamiento autorizados</b>:<br><br>' + esc(volverA())
+      : ''));
 }
 
 /* Lo que quedo a medias cuando la pagina se fue a pedir permiso. */
