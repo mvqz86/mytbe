@@ -3116,8 +3116,13 @@ function limpiarCliente(t){ return String(t || '').replace(/[^A-Za-z0-9._-]/g, '
    al volver. */
 var PEND = 'mytbe.pendiente', ESTADO = 'mytbe.estado';
 
+/* Google compara la direccion de vuelta caracter por caracter, asi que una
+   barra de mas o de menos alcanza para que rechace todo. Se normaliza siempre
+   a la carpeta con barra final, venga como venga. */
 function volverA(){
-  return location.origin + location.pathname.replace(/index\.html$/, '');
+  var r = location.pathname.replace(/index\.html$/, '');
+  if(r.slice(-1) !== '/') r += '/';
+  return location.origin + r;
 }
 
 function irAPedirPermiso(){
