@@ -3077,8 +3077,24 @@ function askConfig(){
    se sincroniza —reordenar cincuenta temas costaria 2.500 unidades cada vez— y
    lo nuevo se agrega al final. */
 
-var OA = 'mytbe.oauth';
-var tokenYT = null, tokenVence = 0;
+var OA = 'mytbe.oauth', TOK = 'mytbe.permiso';
+
+/* El permiso de Google dura una hora. Guardarlo evita que cada recarga te
+   mande de vuelta a elegir cuenta; es un permiso tuyo en tu aparato, igual
+   que el token de GitHub. */
+function guardarToken(t, seg){
+  try { localStorage.setItem(TOK, JSON.stringify({t:t, vence:Date.now() + (seg * 1000)})); }
+  catch(e){}
+}
+function tokenGuardado(){
+  try {
+    var x = JSON.parse(localStorage.getItem(TOK) || 'null');
+    return (x && x.t && Date.now() < x.vence - 60000) ? x.t : '';
+  } catch(e){ return ''; }
+}
+function olvidarToken(){ tokenYT = null; localStorage.removeItem(TOK); }
+
+var tokenYT = null;
 
 function clienteOauth(){ return localStorage.getItem(OA) || ''; }
 
@@ -3096,24 +3112,31 @@ function cargarGoogle(){
 }
 
 function pedirPermiso(){
-  if(tokenYT && Date.now() < tokenVence - 60000) return Promise.resolve(tokenYT);
+  tokenYT = tokenYT || tokenGuardado();
+  if(tokenYT) return Promise.resolve(tokenYT);
   if(!clienteOauth()) return Promise.reject(new Error('sin-cliente'));
 
   return cargarGoogle().then(function(){
     return new Promise(function(ok, mal){
+      var callado = true;
       var c = google.accounts.oauth2.initTokenClient({
         client_id: clienteOauth(),
         scope: 'https://www.googleapis.com/auth/youtube',
         callback: function(r){
           if(r && r.access_token){
             tokenYT = r.access_token;
-            tokenVence = Date.now() + ((r.expires_in || 3600) * 1000);
+            guardarToken(r.access_token, r.expires_in || 3600);
             ok(tokenYT);
           } else mal(new Error('No diste el permiso.'));
         },
-        error_callback: function(){ mal(new Error('No diste el permiso.')); }
+        error_callback: function(){
+          /* Primero se intenta sin molestar; si Google necesita preguntar,
+             recien ahi aparece el selector de cuenta. */
+          if(callado){ callado = false; c.requestAccessToken(); return; }
+          mal(new Error('No diste el permiso.'));
+        }
       });
-      c.requestAccessToken();
+      c.requestAccessToken({prompt:''});
     });
   });
 }
@@ -3261,6 +3284,12 @@ function aYouTubeMusic(item, duena){
     .catch(function(err){
       if(err.message === 'parcial') return;
       if(err.message === 'sin-cliente'){ closeModal(); askOauth(); return; }
+      if(err.status === 401){
+        /* Vencido o revocado: se tira y la proxima se vuelve a pedir. */
+        olvidarToken();
+        contar('El permiso vencio. Tocala de nuevo.');
+        return;
+      }
       if(err.status === 404 && item.listaYT){
         /* La borraron de la cuenta: se hace una nueva. */
         item.listaYT = null;
