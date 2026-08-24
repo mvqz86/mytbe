@@ -146,6 +146,29 @@ La clave de la API es del aparato y la comparten los dos perfiles. El token de
 sincronizacion, en cambio, vive adentro del perfil: si el perfil esta cifrado,
 el token tambien.
 
+## Listas en YouTube Music
+
+YouTube Music no tiene colas anonimas: para que una lista suene en el auto
+—con el tema en pantalla y el boton de siguiente del volante— tiene que
+existir en la cuenta. Android Auto no muestra nada de la app de YouTube,
+porque es video y Google la deja afuera a proposito.
+
+Con el destino puesto en **YouTube Music** (engranaje, *Al disparar*), tocar
+una lista guardada la deja igual alla y la abre. Si nunca se mando, la crea
+como playlist **privada**; si cambio, manda solo la diferencia.
+
+- Leer la lista cuesta 1 unidad; cada tema que se agrega o se saca, 50. Sumar
+  tres temas son unas 150 unidades, no las 2.600 de rehacerla entera.
+- El id de la lista no cambia nunca, asi que en el auto siempre se abre la
+  misma.
+- **mytbe manda**: lo que este alla y no aca, se saca.
+- El orden no se sincroniza. Lo nuevo se agrega al final.
+
+Necesita un **ID de cliente OAuth** del mismo proyecto de Google Cloud donde
+sale la clave: Credenciales -> Crear credenciales -> ID de cliente de OAuth ->
+Aplicacion web, con `https://mvqz86.github.io` en los origenes autorizados. Se
+pega una vez desde el engranaje.
+
 ## Sincronizacion entre dispositivos
 
 Las carpetas y los recientes se pueden compartir entre la tablet, la compu y

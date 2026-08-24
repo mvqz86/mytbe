@@ -2156,7 +2156,11 @@ $('#panel').addEventListener('click', function(e){
   }
   if((a = e.target.closest('[data-open]'))){
     var fo = carpetaPorId(a.dataset.en || current);
-    launch(fo.items.filter(function(i){ return i.ytId === a.dataset.open; })[0]);
+    var cosa = fo.items.filter(function(i){ return i.ytId === a.dataset.open; })[0];
+    /* Una lista con el destino en Music no se dispara: primero se pone al dia
+       alla y despues se abre desde la cuenta. */
+    if(cosa && cosa.kind === 'playlist' && aMusic()){ aYouTubeMusic(cosa, fo); return; }
+    launch(cosa);
   }
 });
 
@@ -3002,6 +3006,9 @@ function askConfig(){
         '<button data-dest="" class="' + (aMusic() ? '' : 'on') + '">YouTube</button>' +
         '<button data-dest="music" class="' + (aMusic() ? 'on' : '') + '">YouTube Music</button>' +
       '</div>' +
+      '<button class="close" data-oauth>' +
+        (clienteOauth() ? 'Cambiar el permiso de YouTube' : 'Permitir crear listas en tu cuenta') +
+      '</button>' +
 
       '<div class="hint">Sincronizacion</div>' +
       '<p class="segnote">Estado: <span id="cfgsync"' + (syncMal ? ' class="mal"' : '') + '>' +
@@ -3019,6 +3026,7 @@ function askConfig(){
         });
         return;
       }
+      if(e.target.closest('[data-oauth]')){ closeModal(); askOauth(); return; }
       if(e.target.closest('[data-bajar]')){ closeModal(); descargarRespaldo(); return; }
       if(e.target.closest('[data-subir]')){ closeModal(); $('#file').click(); return; }
       if(e.target.closest('[data-sync]')){ closeModal(); askSync(); return; }
@@ -3039,6 +3047,227 @@ function askConfig(){
           'de borrar datos al salir, en la configuracion del navegador.';
     });
   }
+}
+
+
+/* ============ listas en YouTube Music ============
+   YouTube Music no tiene colas anonimas: para que suene una lista en el auto,
+   esa lista tiene que existir en la cuenta. Asi que mytbe la crea y despues la
+   mantiene igual a la de aca, mandando solo la diferencia.
+
+   mytbe manda: si algo esta en la lista de alla y no aca, se saca. El orden no
+   se sincroniza —reordenar cincuenta temas costaria 2.500 unidades cada vez— y
+   lo nuevo se agrega al final. */
+
+var OA = 'mytbe.oauth';
+var tokenYT = null, tokenVence = 0;
+
+function clienteOauth(){ return localStorage.getItem(OA) || ''; }
+
+/* La biblioteca de Google se carga recien cuando hace falta: no tiene por que
+   pesar en cada apertura de la app. */
+function cargarGoogle(){
+  if(window.google && window.google.accounts) return Promise.resolve();
+  return new Promise(function(ok, mal){
+    var sc = document.createElement('script');
+    sc.src = 'https://accounts.google.com/gsi/client';
+    sc.onload = function(){ ok(); };
+    sc.onerror = function(){ mal(new Error('No se pudo cargar el permiso de Google.')); };
+    document.head.appendChild(sc);
+  });
+}
+
+function pedirPermiso(){
+  if(tokenYT && Date.now() < tokenVence - 60000) return Promise.resolve(tokenYT);
+  if(!clienteOauth()) return Promise.reject(new Error('sin-cliente'));
+
+  return cargarGoogle().then(function(){
+    return new Promise(function(ok, mal){
+      var c = google.accounts.oauth2.initTokenClient({
+        client_id: clienteOauth(),
+        scope: 'https://www.googleapis.com/auth/youtube',
+        callback: function(r){
+          if(r && r.access_token){
+            tokenYT = r.access_token;
+            tokenVence = Date.now() + ((r.expires_in || 3600) * 1000);
+            ok(tokenYT);
+          } else mal(new Error('No diste el permiso.'));
+        },
+        error_callback: function(){ mal(new Error('No diste el permiso.')); }
+      });
+      c.requestAccessToken();
+    });
+  });
+}
+
+function apiYT(ruta, opciones){
+  opciones = opciones || {};
+  opciones.headers = {'Authorization':'Bearer ' + tokenYT, 'Content-Type':'application/json'};
+  return fetch('https://www.googleapis.com/youtube/v3/' + ruta, opciones).then(function(r){
+    if(r.status === 204) return {};
+    return r.json().then(function(d){
+      if(!r.ok){
+        var e = new Error((d.error && d.error.message) || ('HTTP ' + r.status));
+        e.status = r.status;
+        throw e;
+      }
+      return d;
+    });
+  });
+}
+
+/* Que tiene hoy la lista de alla: id de video -> id del renglon, que es lo que
+   hace falta para poder sacarlo. */
+function leerListaYT(id){
+  var mapa = {};
+  function pagina(token){
+    return apiYT('playlistItems?part=snippet&maxResults=50&playlistId=' +
+                 encodeURIComponent(id) + (token ? '&pageToken=' + token : ''))
+      .then(function(d){
+        (d.items || []).forEach(function(x){
+          mapa[x.snippet.resourceId.videoId] = x.id;
+        });
+        return d.nextPageToken ? pagina(d.nextPageToken) : mapa;
+      });
+  }
+  return pagina('');
+}
+
+function crearListaYT(nombre){
+  return apiYT('playlists?part=snippet,status', {
+    method:'POST',
+    body: JSON.stringify({
+      snippet:{title:nombre, description:'Armada desde mytbe'},
+      status:{privacyStatus:'private'}
+    })
+  }).then(function(d){ return d.id; });
+}
+
+function agregarAYT(lista, videoId){
+  return apiYT('playlistItems?part=snippet', {
+    method:'POST',
+    body: JSON.stringify({snippet:{
+      playlistId: lista,
+      resourceId:{kind:'youtube#video', videoId: videoId}
+    }})
+  });
+}
+
+function sacarDeYT(renglon){
+  return apiYT('playlistItems?id=' + encodeURIComponent(renglon), {method:'DELETE'});
+}
+
+/* Una cosa detras de la otra: en fila la cuota se gasta prolija y los errores
+   de un tema no se llevan puestos a los demas. */
+function enFila(cosas, hacer){
+  var fallados = [];
+  return cosas.reduce(function(cadena, x, i){
+    return cadena.then(function(){
+      return hacer(x, i).catch(function(){ fallados.push(x); });
+    });
+  }, Promise.resolve()).then(function(){ return fallados; });
+}
+
+function contar(txt){
+  var e = $('#ytmsg');
+  if(e) e.innerHTML = txt;
+}
+
+/* El gesto: tocar una lista guardada con el destino en Music la deja igual
+   alla y la abre. Si nunca se mando, la crea. */
+function aYouTubeMusic(item, duena){
+  openModal('<h3>YouTube Music</h3><div class="body">' +
+    '<p class="segnote" id="ytmsg">Pidiendo permiso a Google&hellip;</p>' +
+    '<button class="close" data-cancel>Cerrar</button></div>',
+    function(e){ if(e.target.closest('[data-cancel]')) closeModal(); });
+
+  pedirPermiso()
+    .then(function(){
+      if(item.listaYT) return item.listaYT;
+      contar('Creando <b>' + esc(item.title) + '</b> en tu cuenta&hellip;');
+      return crearListaYT(item.title).then(function(id){
+        item.listaYT = id;
+        save();
+        return id;
+      });
+    })
+    .then(function(lista){
+      contar('Viendo que le falta&hellip;');
+      return leerListaYT(lista).then(function(alla){
+        var aca = (item.ytIds || []).slice(0, TOPE_LISTA);
+        var faltan = aca.filter(function(v){ return !alla[v]; });
+        var sobran = Object.keys(alla).filter(function(v){ return aca.indexOf(v) < 0; });
+
+        if(!faltan.length && !sobran.length){
+          contar('Ya estaba al dia. Abriendola&hellip;');
+          return lista;
+        }
+
+        var hechos = 0, total = faltan.length + sobran.length;
+        function paso(){ hechos++; contar('Sincronizando&hellip; ' + hechos + ' de ' + total); }
+
+        return enFila(sobran, function(v){ return sacarDeYT(alla[v]).then(paso); })
+          .then(function(){
+            return enFila(faltan, function(v){ return agregarAYT(lista, v).then(paso); });
+          })
+          .then(function(fallados){
+            if(fallados.length)
+              contar('Listo, con ' + plural(fallados.length, 'tema', 'temas') +
+                     ' que YouTube Music no acepto. Abriendola&hellip;');
+            return lista;
+          });
+      });
+    })
+    .then(function(lista){
+      closeModal();
+      var url = 'https://music.youtube.com/playlist?list=' + lista;
+      if(esAndroid()) location.href = intentDe(url);
+      else window.open(url, '_blank', 'noopener');
+    })
+    .catch(function(err){
+      if(err.message === 'sin-cliente'){ closeModal(); askOauth(); return; }
+      if(err.status === 404 && item.listaYT){
+        /* La borraron de la cuenta: se hace una nueva. */
+        item.listaYT = null;
+        save();
+        contar('Esa lista ya no esta en tu cuenta. Tocala de nuevo y la creo.');
+        return;
+      }
+      contar('<b>No se pudo.</b> ' + esc(err.message || 'Error de Google') +
+             (err.status === 403 ? '<br>Puede ser la cuota del dia.' : ''));
+    });
+}
+
+/* El id de cliente, una vez y para siempre, como la clave de API. */
+function askOauth(){
+  openModal(
+    '<h3>Permiso de YouTube</h3><div class="body">' +
+      '<p>Para crear listas en tu cuenta, mytbe necesita un <b>ID de cliente OAuth</b>. ' +
+      'Se saca del mismo proyecto de Google Cloud donde sacaste la clave.</p>' +
+      '<p class="segnote">Credenciales &rarr; Crear credenciales &rarr; ID de cliente de OAuth &rarr; ' +
+      'Aplicacion web. En <b>Origenes de JavaScript autorizados</b> va: ' +
+      esc(location.origin) + '</p>' +
+      '<input type="text" id="oain" placeholder="....apps.googleusercontent.com" ' +
+      'autocomplete="off" spellcheck="false" style="width:100%;margin-bottom:10px" value="' +
+      esc(clienteOauth()) + '">' +
+      '<p class="segnote" id="oamsg">La primera vez Google te va a pedir permiso una sola vez.</p>' +
+      '<button class="close" data-guardaroa>Guardar</button>' +
+      '<button class="close" data-cancel>Cancelar</button>' +
+    '</div>',
+    function(e){
+      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+      if(!e.target.closest('[data-guardaroa]')) return;
+      var v = $('#oain').value.trim();
+      if(v.indexOf('.apps.googleusercontent.com') < 0){
+        $('#oamsg').textContent = 'Ese no parece un ID de cliente: terminan en .apps.googleusercontent.com';
+        return;
+      }
+      localStorage.setItem(OA, v);
+      closeModal();
+      avisar('Listo', 'Ya podes mandar listas a YouTube Music: tocalas con el destino puesto en Music.');
+    });
+
+  $('#oain').focus();
 }
 
 /* ============ instalable ============
