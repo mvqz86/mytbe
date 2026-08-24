@@ -261,6 +261,46 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .chip.eslista{background:var(--sel)}
 .th.icono{display:flex;align-items:center;justify-content:center;font-size:21px;
   background:var(--thumb);border-color:var(--thumb-edge);border-radius:5px}
+/* ---- columna de carpetas ----
+   La solapa se parte en dos: a la izquierda que hay, a la derecha lo que
+   elegiste. La columna scrollea sola, asi que crecer a cincuenta carpetas no
+   corre ni un pixel de la lista.
+
+   Abajo de 620px no entra: se esconde y se abre por encima del panel con el
+   boton que dice donde estas parado. */
+.panel{position:relative}
+.dos{display:flex;align-items:stretch;margin:-14px -12px;min-height:260px}
+.lado{width:172px;flex:none;border-right:1px solid var(--line);
+  display:flex;flex-direction:column;padding:8px 0}
+.lado .filtrac{display:flex;gap:5px;padding:0 8px 8px}
+.lado .filtrac input{width:100%;font-size:16px;padding:5px 7px}
+.cps{overflow-y:auto;max-height:70vh;padding:0 6px}
+.cp{display:flex;align-items:center;gap:6px;width:100%;height:30px;padding:0 8px;
+  border:none;background:none;border-radius:6px;text-align:left;
+  font:12.5px Arial,Helvetica,sans-serif;color:var(--ink);white-space:nowrap;overflow:hidden}
+.cp.hija{padding-left:20px;font-size:12px;color:var(--ink-2)}
+.cp.on{background:var(--row-hit);color:var(--ink);font-weight:bold}
+.cp .nm{overflow:hidden;text-overflow:ellipsis}
+.cp .cn{margin-left:auto;font-size:10px;color:var(--ink-3);font-weight:normal;flex:none}
+.cp:active{background:var(--x-hit)}
+.rayita{height:1px;background:var(--line);margin:6px 8px}
+.tabla{flex:1;min-width:0;padding:14px 12px}
+
+/* el boton que reemplaza la columna en pantalla angosta */
+.btnlado{display:none;align-items:center;gap:7px;width:100%;margin-bottom:10px;
+  padding:8px 10px;text-align:left;font:bold 12px Arial,Helvetica,sans-serif}
+.btnlado .cn{margin-left:auto;font-weight:normal;color:var(--ink-3);font-size:10.5px}
+
+@media (max-width:620px){
+  .dos{display:block;margin:-14px -12px}
+  .lado{display:none}
+  .lado.abierto{display:flex;position:absolute;inset:0;z-index:6;width:auto;
+    background:var(--panel);border-right:none;border-radius:0 0 12px 12px}
+  .lado.abierto .cps{max-height:none;flex:1}
+  .btnlado{display:flex}
+  .tabla{padding:14px 12px}
+}
+
 /* ---- vista lista ----
    La subcarpeta deja de ser un lugar al que se entra y pasa a ser un
    encabezado. La cabecera se queda pegada arriba mientras se scrollea, que
@@ -838,6 +878,9 @@ var modoOrden = false;            /* la lista guardada se esta reordenando */
    se pueden juntar de varias carpetas y hasta de varias solapas, y quedan en
    el orden en que se fueron tocando, que es el orden en que van a sonar. */
 var modoElegir = false, elegidos = [];
+/* Que carpeta esta elegida en la columna, por solapa. En memoria: es donde
+   estas parado, no algo que valga la pena guardar. */
+var elegida = {}, ladoAbierto = false;
 
 function posicionElegido(ytId){
   for(var i = 0; i < elegidos.length; i++) if(elegidos[i].ytId === ytId) return i;
@@ -1039,15 +1082,26 @@ function renderFolder(){
   current = f.id;
   if(!f.plegados) f.plegados = {};
 
+  /* La columna elige el ALCANCE; de ahi para abajo todo funciona igual que
+     antes, solo que colgando de otra carpeta. */
+  var raiz = carpetaPorId(elegida[f.id]) || f;
+  if(!carpetaPorId(elegida[f.id])) elegida[f.id] = f.id;
+
   var buscado = pelar(filtro.trim()), filtrando = !!buscado;
-  var hijas = hijasDe(f.id), total = cuentaDe(f);
+  var hijas = hijasDe(raiz.id), total = cuentaDe(raiz);
   var html = '';
 
   /* El filtro aparece cuando hay algo que filtrar. En una carpeta de dos
      cosas seria un campo de mas. */
+  html += '<div class="dos">' + columnaCarpetas(f, raiz) + '<div class="tabla">';
+
+  html += '<button class="btnlado" data-verlado>' +
+    '<span class="fl ' + (ladoAbierto ? 'abierta' : 'cerrada') + '"></span>' +
+    esc(raiz.name) + '<span class="cn">' + plural(total, 'elemento', 'elementos') + '</span></button>';
+
   if(total > 6 && !modoOrden){
     html += '<div class="filtro"><input type="text" id="filtro" placeholder="filtrar en ' +
-            esc(f.name) + '" autocomplete="off" spellcheck="false" value="' + esc(filtro) + '"></div>';
+            esc(raiz.name) + '" autocomplete="off" spellcheck="false" value="' + esc(filtro) + '"></div>';
   }
 
   function coincide(it){
@@ -1150,27 +1204,27 @@ function renderFolder(){
 
   if(!hijas.length){
     /* Sin subcarpetas no hay nada que agrupar: las cosas, y listo. */
-    var propios = modoOrden ? f.items : f.items.filter(coincide);
+    var propios = modoOrden ? raiz.items : raiz.items.filter(coincide);
     mostrados = propios.length;
-    html += filas(f, propios);
+    html += filas(raiz, propios);
   } else {
     /* En el mismo orden en que cuelgan: cada una y despues las suyas. */
     (function recorrer(padre){
       hijasDe(padre).forEach(function(h){
-        grupo(rutaRelativa(f.id, h.id), h);
+        grupo(rutaRelativa(raiz.id, h.id), h);
         recorrer(h.id);
       });
-    })(f.id);
+    })(raiz.id);
     /* Lo suelto de la propia carpeta, al final, para que no quede sepultado. */
-    if(f.items.length) grupo(['Sueltas en ' + f.name], f, true);
+    if(raiz.items.length) grupo(['Sueltas en ' + raiz.name], raiz, true);
   }
 
   if(!total){
     modoOrden = false;
-    html += '<div class="empty">Esta ' + esc(tipoDe(f)) + ' esta vacia.<br>' +
+    html += '<div class="empty">Esta ' + esc(tipoDe(raiz)) + ' esta vacia.<br>' +
             'Busca algo arriba y toca <b>+</b> en el resultado.</div>';
   } else if(filtrando && !mostrados){
-    html += '<div class="empty">Nada con <b>' + esc(filtro.trim()) + '</b> en ' + esc(f.name) + '.</div>';
+    html += '<div class="empty">Nada con <b>' + esc(filtro.trim()) + '</b> en ' + esc(raiz.name) + '.</div>';
   }
 
   html += '<div class="foot">';
@@ -1182,22 +1236,45 @@ function renderFolder(){
     html += 'Move cada uno con las flechas &middot; <a data-orden>listo</a>';
   } else if(filtrando){
     html += plural(mostrados, 'elemento', 'elementos') + ' con ese texto';
-    if(videosVisibles(f).length > 1){
+    if(videosVisibles(raiz).length > 1){
       html += ' &middot; <a data-playtodo>&#9654; reproducir</a>';
     }
   } else {
     html += plural(total, 'elemento', 'elementos');
     if(hijas.length) html += ' en ' + plural(grupos, 'grupo', 'grupos');
-    if(videosVisibles(f).length > 1){
+    if(videosVisibles(raiz).length > 1){
       html += ' &middot; <a data-playtodo>&#9654; reproducir todo</a>';
     }
-    html += ' &middot; <a data-nuevasub>' + esc(tipoHijaDe(f.id)) + ' nueva</a>';
+    html += ' &middot; <a data-nuevasub>' + esc(tipoHijaDe(raiz.id)) + ' nueva</a>';
     if(total > 1)             html += ' &middot; <a data-orden>ordenar</a>';
-    if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar ' + esc(tipoDe(f)) + '</a>';
+    if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar ' + esc(tipoDe(raiz)) + '</a>';
   }
-  html += '</div>';
+  html += '</div></div></div>';
 
   $('#panel').innerHTML = html;
+}
+
+/* La columna: la solapa entera arriba y despues su arbol, sangrado y sin
+   repetir el nombre de la madre. */
+function columnaCarpetas(solapa, raiz){
+  var html = '<div class="lado' + (ladoAbierto ? ' abierto' : '') + '">';
+
+  html += '<button class="cp' + (raiz.id === solapa.id ? ' on' : '') + '" data-alcance="' +
+    esc(solapa.id) + '"><span class="nm">Todo ' + esc(solapa.name) + '</span>' +
+    '<span class="cn">' + cuentaDe(solapa) + '</span></button>';
+  html += '<div class="rayita"></div>';
+
+  html += '<div class="cps">';
+  (function nivel(padre, prof){
+    hijasDe(padre).forEach(function(c){
+      html += '<button class="cp' + (prof ? ' hija' : '') + (c.id === raiz.id ? ' on' : '') +
+        '" data-alcance="' + esc(c.id) + '"><span class="nm">' + esc(c.name) + '</span>' +
+        '<span class="cn">' + cuentaDe(c) + '</span></button>';
+      nivel(c.id, prof + 1);
+    });
+  })(solapa.id, 0);
+  html += '</div></div>';
+  return html;
 }
 
 /* Re-dibujar el panel se lleva puesto el foco del campo: hay que devolverlo
@@ -1702,7 +1779,7 @@ if(window.matchMedia){
 
 $('#tabs').addEventListener('click', function(e){
   var t = e.target.closest('[data-tab]');
-  if(t){ current = t.dataset.tab; results = null; modoOrden = false; render(); return; }
+  if(t){ current = t.dataset.tab; results = null; modoOrden = false; ladoAbierto = false; render(); return; }
   /* Ojo: modoElegir sobrevive al cambio de solapa. Es el punto: juntar cosas
      de carpetas y de solapas distintas en una misma lista. */
   if(e.target.closest('[data-newfolder]')) askNewFolder();
@@ -1827,6 +1904,15 @@ $('#panel').addEventListener('click', function(e){
     render();
     return;
   }
+  if((a = e.target.closest('[data-alcance]'))){
+    elegida[current] = a.dataset.alcance;
+    filtro = '';
+    ladoAbierto = false;
+    render();
+    window.scrollTo(0, 0);
+    return;
+  }
+  if(e.target.closest('[data-verlado]')){ ladoAbierto = !ladoAbierto; render(); return; }
   if((a = e.target.closest('[data-dentro2]'))){ askNewFolder(a.dataset.dentro2); return; }
   if((a = e.target.closest('[data-grupo]'))){
     var fg = carpetaPorId(current);
