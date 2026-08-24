@@ -1346,6 +1346,14 @@ function itemsDe(c){
 
 /* La columna: la solapa entera arriba y despues su arbol, sangrado y sin
    repetir el nombre de la madre. */
+/* En pantalla angosta la columna no entra al lado, asi que al entrar a una
+   solapa con carpetas se muestra ELLA y no la lista: caer en doscientos temas
+   no ayuda a nadie, y lo que uno viene a hacer es elegir de donde. */
+function ladoInicial(){
+  var f = carpetaPorId(current);
+  ladoAbierto = !!(f && !f.padre && hijasDe(f.id).length && window.innerWidth <= 620);
+}
+
 function columnaCarpetas(solapa, raiz){
   var html = '<div class="lado' + (ladoAbierto ? ' abierto' : '') + '">';
 
@@ -1965,8 +1973,8 @@ if(window.matchMedia){
 
 $('#tabs').addEventListener('click', function(e){
   var t = e.target.closest('[data-tab]');
-  if(t){ current = t.dataset.tab; results = null; modoOrden = false; ladoAbierto = false;
-         modoCarpetas = false; render(); return; }
+  if(t){ current = t.dataset.tab; results = null; modoOrden = false; modoCarpetas = false;
+         ladoInicial(); render(); return; }
   /* Ojo: modoElegir sobrevive al cambio de solapa. Es el punto: juntar cosas
      de carpetas y de solapas distintas en una misma lista. */
   if(e.target.closest('[data-newfolder]')) askNewFolder();
@@ -2790,6 +2798,7 @@ function entrar(perfil, llave){
     current = db.folders[0].id;
     results = null;
     modoOrden = false;
+    ladoInicial();
     localStorage.setItem(ACTUAL, perfil.id);
     $('#candado').hidden = true;
     $('#perfillink').title = 'Perfil: ' + perfil.nombre;
