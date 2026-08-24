@@ -456,6 +456,9 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
   text-transform:uppercase;letter-spacing:.07em}
 .body > .hint:first-child{margin-top:0}
 .box .mal{color:var(--red-text)}
+.diag{margin:0 0 4px;padding:8px 9px;background:var(--field);border:1px solid var(--edge);
+  border-radius:4px;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--ink-2);
+  white-space:pre-wrap;word-break:break-word}
 .box .close{width:100%;margin-top:4px}
 .box .close.peligro{color:#fff;border-color:var(--peligro-edge);
   background:linear-gradient(var(--peligro-a),var(--peligro-b))}
@@ -792,6 +795,8 @@ function hace(ts){
 
 /* ============ lanzar a YouTube ============ */
 /* Radio: el vivo actual del canal, aunque el stream se haya reiniciado. */
+var VERSION = '2026-08-24';
+
 var TOPE_LISTA = 50;
 
 /* A que app se le entrega lo que se dispara. Es del aparato, no del perfil:
@@ -3015,6 +3020,9 @@ function askConfig(){
       '<button class="close" data-bajar>Descargar copia</button>' +
       '<button class="close" data-subir>Restaurar copia</button>' +
 
+      '<div class="hint">Diagnostico</div>' +
+      '<pre class="diag" id="cfgdiag">&nbsp;</pre>' +
+
       '<div class="hint">Almacenamiento</div>' +
       '<p class="segnote" id="cfgalm">Averiguando&hellip;</p>' +
 
@@ -3055,6 +3063,37 @@ function askConfig(){
 
   /* Si el navegador no lo marco como permanente, puede barrer la clave y las
      carpetas cuando se le antoje. Saberlo evita buscar el problema en la app. */
+  /* Todo el estado en una pantalla: sirve para que una sola captura diga que
+     pasa, en vez de ir preguntando de a un dato por vez. */
+  (function(){
+    var d = $('#cfgdiag');
+    var per = JSON.parse(localStorage.getItem(TOK) || 'null');
+    var listas = [];
+    db.folders.forEach(function(f){
+      f.items.forEach(function(i){
+        if(i.kind === 'playlist')
+          listas.push('  ' + i.title.slice(0, 18) + ': ' +
+                      (i.listaYT ? 'en YT (' + i.listaYT.slice(0, 10) + ')' : 'NO mandada') +
+                      ' / ' + (i.ytIds || []).length + ' temas');
+      });
+    });
+    d.textContent =
+      'version   ' + VERSION + '\n' +
+      'aparato   ' + (esAndroid() ? 'Android' : 'otro') +
+                     (window.matchMedia && matchMedia('(display-mode: standalone)').matches
+                       ? ' / app instalada' : ' / navegador') + '\n' +
+      'clave API ' + (getKey() ? 'si' : 'NO') + '\n' +
+      'cliente   ' + (clienteOauth() ? clienteOauth().length + ' caracteres' : 'NO') + '\n' +
+      'permiso   ' + (per && per.t
+                        ? (Date.now() < per.vence
+                             ? 'vale ' + Math.round((per.vence - Date.now()) / 60000) + ' min'
+                             : 'vencido')
+                        : 'NO') + '\n' +
+      'destino   ' + (aMusic() ? 'YouTube Music' : 'YouTube') + '\n' +
+      'sync      ' + syncDice + '\n' +
+      'listas    ' + (listas.length ? '\n' + listas.join('\n') : 'ninguna guardada');
+  })();
+
   var alm = $('#cfgalm');
   if(!navigator.storage || !navigator.storage.persisted){
     alm.textContent = 'Este navegador no dice si guarda de forma permanente.';
