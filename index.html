@@ -1082,10 +1082,12 @@ function renderFolder(){
   current = f.id;
   if(!f.plegados) f.plegados = {};
 
-  /* La columna elige el ALCANCE; de ahi para abajo todo funciona igual que
-     antes, solo que colgando de otra carpeta. */
-  var raiz = carpetaPorId(elegida[f.id]) || f;
-  if(!carpetaPorId(elegida[f.id])) elegida[f.id] = f.id;
+  /* La columna aparece sola donde hay algo que navegar: una solapa con
+     carpetas adentro. Radios o Podcast, que son una lista y nada mas, siguen
+     exactamente como estaban. */
+  var conLado = !f.padre && hijasDe(f.id).length > 0;
+  var raiz = conLado ? (carpetaPorId(elegida[f.id]) || f) : f;
+  if(conLado && !carpetaPorId(elegida[f.id])) elegida[f.id] = f.id;
 
   var buscado = pelar(filtro.trim()), filtrando = !!buscado;
   var hijas = hijasDe(raiz.id), total = cuentaDe(raiz);
@@ -1093,11 +1095,13 @@ function renderFolder(){
 
   /* El filtro aparece cuando hay algo que filtrar. En una carpeta de dos
      cosas seria un campo de mas. */
-  html += '<div class="dos">' + columnaCarpetas(f, raiz) + '<div class="tabla">';
-
-  html += '<button class="btnlado" data-verlado>' +
-    '<span class="fl ' + (ladoAbierto ? 'abierta' : 'cerrada') + '"></span>' +
-    esc(raiz.name) + '<span class="cn">' + plural(total, 'elemento', 'elementos') + '</span></button>';
+  if(conLado){
+    html += '<div class="dos">' + columnaCarpetas(f, raiz) + '<div class="tabla">' +
+      '<button class="btnlado" data-verlado>' +
+        '<span class="fl ' + (ladoAbierto ? 'abierta' : 'cerrada') + '"></span>' +
+        esc(raiz.name) + '<span class="cn">' + plural(total, 'elemento', 'elementos') +
+      '</span></button>';
+  }
 
   if(total > 6 && !modoOrden){
     html += '<div class="filtro"><input type="text" id="filtro" placeholder="filtrar en ' +
@@ -1202,7 +1206,17 @@ function renderFolder(){
     if(!plegado) html += filas(carpeta, items);
   }
 
-  if(!hijas.length){
+  if(conLado){
+    /* Con la columna al lado, el acordeon sobra: la jerarquia la maneja ella y
+       aca abajo va una lista y nada mas, con todo lo que cuelga del alcance
+       elegido. Dos controles para lo mismo era justamente el problema. */
+    var todo = itemsDe(raiz).filter(function(x){ return modoOrden || coincide(x.it); });
+    mostrados = todo.length;
+    grupos = 0;
+    html += todo.map(function(x, i){
+      return fila(x.it, x.en, x.i, x.ultimo);
+    }).join('');
+  } else if(!hijas.length){
     /* Sin subcarpetas no hay nada que agrupar: las cosas, y listo. */
     var propios = modoOrden ? raiz.items : raiz.items.filter(coincide);
     mostrados = propios.length;
@@ -1241,7 +1255,7 @@ function renderFolder(){
     }
   } else {
     html += plural(total, 'elemento', 'elementos');
-    if(hijas.length) html += ' en ' + plural(grupos, 'grupo', 'grupos');
+    if(!conLado && hijas.length) html += ' en ' + plural(grupos, 'grupo', 'grupos');
     if(videosVisibles(raiz).length > 1){
       html += ' &middot; <a data-playtodo>&#9654; reproducir todo</a>';
     }
@@ -1249,9 +1263,28 @@ function renderFolder(){
     if(total > 1)             html += ' &middot; <a data-orden>ordenar</a>';
     if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar ' + esc(tipoDe(raiz)) + '</a>';
   }
-  html += '</div></div></div>';
+  html += '</div>';
+  if(conLado) html += '</div></div>';
 
   $('#panel').innerHTML = html;
+}
+
+/* Todo lo que cuelga de una carpeta, con la duena de cada cosa al lado para
+   que eliminar y ordenar sepan a quien tocarle. Primero lo suyo, despues lo
+   de sus hijas, en el orden en que cuelgan. */
+function itemsDe(c){
+  var out = [];
+  function meter(carpeta){
+    var ultimo = carpeta.items.length - 1;
+    carpeta.items.forEach(function(it, i){
+      out.push({it:it, en:carpeta, i:i, ultimo:ultimo});
+    });
+  }
+  meter(c);
+  (function rec(padre){
+    hijasDe(padre).forEach(function(h){ meter(h); rec(h.id); });
+  })(c.id);
+  return out;
 }
 
 /* La columna: la solapa entera arriba y despues su arbol, sangrado y sin
@@ -2828,16 +2861,30 @@ function barraLista(){
   b.hidden = !modoElegir;
   $('#f-lista').setAttribute('aria-pressed', modoElegir ? 'true' : 'false');
   if(!modoElegir) return;
-  b.innerHTML = elegidos.length
-    ? '<b>' + plural(elegidos.length, 'elegido', 'elegidos') + '</b>' +
-      '<span class="der">' +
-        '<button data-playelegidos>&#9654; reproducir</button>' +
-        '<button data-listaelegidos>guardar</button>' +
-      '</span>'
-    : 'Toca los que quieras, o <b>+ todo</b> para un grupo entero';
+  b.innerHTML = '<button data-todolovisto>+ todo lo que se ve</button>' +
+    (elegidos.length
+      ? '<b>' + plural(elegidos.length, 'elegido', 'elegidos') + '</b>' +
+        '<span class="der">' +
+          '<button data-playelegidos>&#9654; reproducir</button>' +
+          '<button data-listaelegidos>guardar</button>' +
+        '</span>'
+      : '<span style="margin-left:4px">o toca uno por uno</span>');
 }
 
 $('#barralista').addEventListener('click', function(e){
+  if(e.target.closest('[data-todolovisto]')){
+    var fv = carpetaPorId(current);
+    var raizv = carpetaPorId(elegida[fv.id]) || fv;
+    var vs = videosVisibles(raizv);
+    var puestos = vs.length && vs.every(function(i){ return posicionElegido(i.ytId) > -1; });
+    vs.forEach(function(it){
+      var donde = posicionElegido(it.ytId);
+      if(puestos){ if(donde > -1) elegidos.splice(donde, 1); }
+      else if(donde < 0) elegidos.push({ytId:it.ytId, title:it.title, thumb:it.thumb || ''});
+    });
+    render();
+    return;
+  }
   if(e.target.closest('[data-playelegidos]')){
     reproducirLista(elegidos, 'Playlist');
     salirDeLista();
