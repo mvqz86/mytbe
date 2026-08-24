@@ -610,7 +610,7 @@ function claveDelEnlace(){
      app web— asi que puede viajar en el enlace como la clave. */
   var mo = /[#&]o=([^&]*)/.exec(location.hash || '');
   if(mo){
-    var oa = decodeURIComponent(mo[1]).trim();
+    var oa = limpiarCliente(decodeURIComponent(mo[1]));
     if(oa.indexOf('.apps.googleusercontent.com') > -1) localStorage.setItem('mytbe.oauth', oa);
   }
 
@@ -3098,6 +3098,11 @@ var tokenYT = null;
 
 function clienteOauth(){ return localStorage.getItem(OA) || ''; }
 
+/* Un ID de cliente es solo letras, numeros, punto, guion y guion bajo. Copiar
+   desde un chat suele traer espacios de ancho cero que no se ven y que dejan
+   a Google sin encontrar el cliente. */
+function limpiarCliente(t){ return String(t || '').replace(/[^A-Za-z0-9._-]/g, ''); }
+
 /* La biblioteca de Google se carga recien cuando hace falta: no tiene por que
    pesar en cada apertura de la app. */
 function cargarGoogle(){
@@ -3314,14 +3319,18 @@ function askOauth(){
       '<input type="text" id="oain" placeholder="....apps.googleusercontent.com" ' +
       'autocomplete="off" spellcheck="false" style="width:100%;margin-bottom:10px" value="' +
       esc(clienteOauth()) + '">' +
-      '<p class="segnote" id="oamsg">La primera vez Google te va a pedir permiso una sola vez.</p>' +
+      '<p class="segnote" id="oamsg">' +
+        (clienteOauth()
+          ? 'Guardado: <b>' + clienteOauth().length + ' caracteres</b>, termina en <b>' +
+            esc(clienteOauth().slice(-14)) + '</b>. Comparalo con el otro aparato.'
+          : 'La primera vez Google te va a pedir permiso una sola vez.') + '</p>' +
       '<button class="close" data-guardaroa>Guardar</button>' +
       '<button class="close" data-cancel>Cancelar</button>' +
     '</div>',
     function(e){
       if(e.target.closest('[data-cancel]')){ closeModal(); return; }
       if(!e.target.closest('[data-guardaroa]')) return;
-      var v = $('#oain').value.trim();
+      var v = limpiarCliente($('#oain').value);
       if(v.indexOf('.apps.googleusercontent.com') < 0){
         $('#oamsg').textContent = 'Ese no parece un ID de cliente: terminan en .apps.googleusercontent.com';
         return;
