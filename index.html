@@ -3178,12 +3178,20 @@ function sacarDeYT(renglon){
 /* Una cosa detras de la otra: en fila la cuota se gasta prolija y los errores
    de un tema no se llevan puestos a los demas. */
 function enFila(cosas, hacer){
-  var fallados = [];
+  var fallados = [], porque = '';
   return cosas.reduce(function(cadena, x, i){
     return cadena.then(function(){
-      return hacer(x, i).catch(function(){ fallados.push(x); });
+      return hacer(x, i).catch(function(e){
+        fallados.push(x);
+        /* El motivo del primero alcanza: si falla uno suele fallar por lo
+           mismo, y sin el motivo no hay como saber que paso. */
+        if(!porque) porque = (e && e.message) || 'sin motivo';
+      });
     });
-  }, Promise.resolve()).then(function(){ return fallados; });
+  }, Promise.resolve()).then(function(){
+    fallados.porque = porque;
+    return fallados;
+  });
 }
 
 function contar(txt){
@@ -3234,9 +3242,12 @@ function aYouTubeMusic(item, duena){
             return enFila(faltan, function(v){ return agregarAYT(lista, v).then(paso); });
           })
           .then(function(fallados){
-            if(fallados.length)
-              contar('Listo, con ' + plural(fallados.length, 'tema', 'temas') +
-                     ' que YouTube Music no acepto. Abriendola&hellip;');
+            if(fallados.length){
+              contar('<b>No entraron ' + plural(fallados.length, 'tema', 'temas') + '.</b><br>' +
+                     'Google dijo: ' + esc(fallados.porque));
+              /* Con temas afuera no se abre sola: primero hay que leer esto. */
+              throw new Error('parcial');
+            }
             return lista;
           });
       });
@@ -3248,6 +3259,7 @@ function aYouTubeMusic(item, duena){
       else window.open(url, '_blank', 'noopener');
     })
     .catch(function(err){
+      if(err.message === 'parcial') return;
       if(err.message === 'sin-cliente'){ closeModal(); askOauth(); return; }
       if(err.status === 404 && item.listaYT){
         /* La borraron de la cuenta: se hace una nueva. */
