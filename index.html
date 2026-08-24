@@ -285,15 +285,32 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .cp:active{background:var(--x-hit)}
 .rayita{height:1px;background:var(--line);margin:6px 8px}
 
-/* Acomodando carpetas: cada fila gana sus flechas y se puede arrastrar. */
-.cp.acomodando{cursor:grab}
-.cp.encima{background:var(--sel);color:#fff}
-.cp .fdel{display:flex;gap:2px;margin-left:auto;flex:none}
-.cp .fdel button{width:22px;height:22px;padding:0;border-radius:4px;font-size:8px;
-  border:1px solid var(--edge);background:none;color:var(--ink-2)}
-.cp .fdel button:disabled{opacity:.3}
 .ladopie{padding:8px;border-top:1px solid var(--line);display:flex;gap:5px}
 .ladopie button{flex:1;padding:7px 8px;font-size:11px}
+
+/* ---- acomodar ----
+   Ocupa el panel entero. Meter tres botones por fila en una columna de 172px
+   dejaba los nombres cortados en "Momo s..."; aca la fila es solo el nombre y
+   los botones son unos solos, abajo, que actuan sobre el que elegiste. */
+.acom{display:flex;flex-direction:column;min-height:300px}
+.acomtit{font-size:11.5px;color:var(--ink-2);margin:0 0 10px}
+.acomlista{flex:1}
+.ac{display:flex;align-items:center;gap:8px;width:100%;padding:11px 12px;margin-bottom:2px;
+  border:1px solid transparent;border-radius:8px;background:none;text-align:left;
+  font:13.5px Arial,Helvetica,sans-serif;color:var(--ink)}
+.ac .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac .cn{color:var(--ink-3);font-size:11px;flex:none}
+.ac.hija{margin-left:22px}
+.ac.hija2{margin-left:44px}
+.ac.sel{background:var(--row-hit);border-color:var(--sel)}
+.ac.encima{background:var(--sel);color:#fff}
+.ac:active{background:var(--x-hit)}
+.acombarra{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:6px;padding:10px 0 2px;margin-top:10px}
+.acombarra button{min-width:88px}
+.acombarra button{flex:1;padding:11px 8px}
+.acombarra button:disabled{opacity:.35}
+.acombarra .listo{flex:0 0 auto;padding:11px 16px}
 .tabla{flex:1;min-width:0;padding:14px 12px}
 
 /* el boton que reemplaza la columna en pantalla angosta */
@@ -891,6 +908,7 @@ var modoElegir = false, elegidos = [];
 /* Que carpeta esta elegida en la columna, por solapa. En memoria: es donde
    estas parado, no algo que valga la pena guardar. */
 var elegida = {}, ladoAbierto = false, modoCarpetas = false, arrastrando = null;
+var carpetaSel = null;   /* la carpeta marcada mientras se acomoda */
 
 function posicionElegido(ytId){
   for(var i = 0; i < elegidos.length; i++) if(elegidos[i].ytId === ytId) return i;
@@ -1105,6 +1123,11 @@ function renderFolder(){
 
   /* El filtro aparece cuando hay algo que filtrar. En una carpeta de dos
      cosas seria un campo de mas. */
+  if(conLado && modoCarpetas){
+    $('#panel').innerHTML = pantallaAcomodar(f);
+    return;
+  }
+
   if(conLado){
     html += '<div class="dos">' + columnaCarpetas(f, raiz) + '<div class="tabla">' +
       '<button class="btnlado" data-verlado>' +
@@ -1309,31 +1332,49 @@ function columnaCarpetas(solapa, raiz){
 
   html += '<div class="cps">';
   (function nivel(padre, prof){
-    var hs = hijasDe(padre), ultima = hs.length - 1;
-    hs.forEach(function(c, i){
-      var clases = 'cp' + (prof ? ' hija' : '') + (c.id === raiz.id ? ' on' : '') +
-                   (modoCarpetas ? ' acomodando' : '');
-      html += '<div class="' + clases + '"' +
-        (modoCarpetas ? ' draggable="true" data-arrastra="' + esc(c.id) + '"'
-                      : ' data-alcance="' + esc(c.id) + '"') + '>' +
-        '<span class="nm">' + esc(c.name) + '</span>' +
-        (modoCarpetas
-          ? '<span class="fdel">' +
-              '<button data-subec="' + esc(c.id) + '" title="Subir"' + (i === 0 ? ' disabled' : '') + '>&#9650;</button>' +
-              '<button data-bajac="' + esc(c.id) + '" title="Bajar"' + (i === ultima ? ' disabled' : '') + '>&#9660;</button>' +
-              '<button data-moverc="' + esc(c.id) + '" title="Meter adentro de otra">&#8618;</button>' +
-            '</span>'
-          : '<span class="cn">' + cuentaDe(c) + '</span>') +
-      '</div>';
+    hijasDe(padre).forEach(function(c){
+      html += '<button class="cp' + (prof ? ' hija' : '') + (c.id === raiz.id ? ' on' : '') +
+        '" data-alcance="' + esc(c.id) + '"><span class="nm">' + esc(c.name) + '</span>' +
+        '<span class="cn">' + cuentaDe(c) + '</span></button>';
       nivel(c.id, prof + 1);
     });
   })(solapa.id, 0);
   html += '</div>';
 
-  html += '<div class="ladopie"><button data-acomodar>' +
-    (modoCarpetas ? 'listo' : 'acomodar') + '</button></div>';
-
+  html += '<div class="ladopie"><button data-acomodar>acomodar</button></div>';
   html += '</div>';
+  return html;
+}
+
+/* ---- la pantalla de acomodar ----
+   Se marca una carpeta y los botones de abajo actuan sobre esa. Uno solo de
+   cada cosa en vez de tres por fila: los nombres entran enteros y no importa
+   cuantas carpetas haya. */
+function pantallaAcomodar(solapa){
+  var sel = carpetaPorId(carpetaSel);
+  var hs = sel ? hijasDe(sel.padre || null) : [];
+  var i = sel ? hs.indexOf(sel) : -1;
+
+  var html = '<div class="acom"><p class="acomtit">Toca una carpeta y usa los botones de abajo. ' +
+    'Con mouse tambien podes arrastrarla encima de otra para meterla adentro.</p><div class="acomlista">';
+
+  (function nivel(padre, prof){
+    hijasDe(padre).forEach(function(c){
+      html += '<button class="ac' + (prof === 1 ? ' hija' : (prof > 1 ? ' hija2' : '')) +
+        (c.id === carpetaSel ? ' sel' : '') + '" draggable="true" data-marcarc="' + esc(c.id) +
+        '" data-arrastra="' + esc(c.id) + '">' +
+        '<span class="nm">' + esc(c.name) + '</span>' +
+        '<span class="cn">' + cuentaDe(c) + '</span></button>';
+      nivel(c.id, prof + 1);
+    });
+  })(solapa.id, 0);
+
+  html += '</div><div class="acombarra">' +
+    '<button data-subec' + (i > 0 ? '' : ' disabled') + '>&#9650; subir</button>' +
+    '<button data-bajac' + (sel && i < hs.length - 1 ? '' : ' disabled') + '>&#9660; bajar</button>' +
+    '<button data-moverc' + (sel ? '' : ' disabled') + '>meter en&hellip;</button>' +
+    '<button class="listo" data-acomodar>listo</button>' +
+  '</div></div>';
   return html;
 }
 
@@ -2028,12 +2069,18 @@ $('#panel').addEventListener('click', function(e){
   }
   if(e.target.closest('[data-acomodar]')){
     modoCarpetas = !modoCarpetas;
+    carpetaSel = null;
     render();
     return;
   }
-  if((a = e.target.closest('[data-subec]'))){ moverCarpeta(a.dataset.subec, -1); return; }
-  if((a = e.target.closest('[data-bajac]'))){ moverCarpeta(a.dataset.bajac,  1); return; }
-  if((a = e.target.closest('[data-moverc]'))){ askMoverCarpeta(a.dataset.moverc); return; }
+  if((a = e.target.closest('[data-marcarc]'))){
+    carpetaSel = (carpetaSel === a.dataset.marcarc ? null : a.dataset.marcarc);
+    render();
+    return;
+  }
+  if(e.target.closest('[data-subec]')){ moverCarpeta(carpetaSel, -1); return; }
+  if(e.target.closest('[data-bajac]')){ moverCarpeta(carpetaSel,  1); return; }
+  if(e.target.closest('[data-moverc]')){ askMoverCarpeta(carpetaSel); return; }
   if((a = e.target.closest('[data-alcance]'))){
     elegida[current] = a.dataset.alcance;
     filtro = '';
