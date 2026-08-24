@@ -600,11 +600,19 @@ function claveValida(k){ return k.indexOf('AIza') === 0 && k.length >= 20; }
    barra apenas la guardamos, para que no quede a la vista ni en el historial. */
 function claveDelEnlace(){
   var m = /[#&]k=([^&]*)/.exec(location.hash || '');
-  if(!m && !/[#&]g=/.test(location.hash || '')) return;
+  if(!m && !/[#&][go]=/.test(location.hash || '')) return;
   if(!m) m = ['', ''];
   var k;
   try { k = decodeURIComponent(m[1]).trim(); } catch(e){ k = ''; }
   if(claveValida(k)) setKey(k);
+
+  /* El id de cliente de OAuth no es un secreto —va a la vista en cualquier
+     app web— asi que puede viajar en el enlace como la clave. */
+  var mo = /[#&]o=([^&]*)/.exec(location.hash || '');
+  if(mo){
+    var oa = decodeURIComponent(mo[1]).trim();
+    if(oa.indexOf('.apps.googleusercontent.com') > -1) localStorage.setItem('mytbe.oauth', oa);
+  }
 
   var mg = /[#&]g=([^&]*)/.exec(location.hash || '');
   if(mg){
@@ -2637,7 +2645,8 @@ function enlaceCompleto(){
   var g = getGist();
   var url = location.origin + location.pathname +
             '#k=' + encodeURIComponent(getKey()) +
-            '&g=' + encodeURIComponent(g.token + ':' + g.id);
+            '&g=' + encodeURIComponent(g.token + ':' + g.id) +
+            (clienteOauth() ? '&o=' + encodeURIComponent(clienteOauth()) : '');
   var decir = function(t){ if($('#syncmsg')) $('#syncmsg').textContent = t; };
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(url).then(
