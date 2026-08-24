@@ -3174,6 +3174,47 @@ function hayPermiso(){
   return !!tokenYT;
 }
 
+/* La biblioteca de Google se carga recien cuando hace falta. */
+function cargarGoogle(){
+  if(window.google && window.google.accounts) return Promise.resolve();
+  return new Promise(function(ok, mal){
+    var sc = document.createElement('script');
+    sc.src = 'https://accounts.google.com/gsi/client';
+    sc.onload = function(){ ok(); };
+    sc.onerror = function(){ mal(new Error('sin-google')); };
+    document.head.appendChild(sc);
+  });
+}
+
+/* Primero la ventana emergente, que no exige registrar ninguna direccion.
+   Donde la bloquean —la app instalada en Android— cae la redireccion, que
+   siempre funciona pero pide tener la URI cargada en Google Cloud. */
+function permisoPorEmergente(){
+  return cargarGoogle().then(function(){
+    return new Promise(function(ok, mal){
+      var c = google.accounts.oauth2.initTokenClient({
+        client_id: clienteOauth(),
+        scope: 'https://www.googleapis.com/auth/youtube',
+        callback: function(r){
+          if(r && r.access_token){
+            tokenYT = r.access_token;
+            guardarToken(r.access_token, r.expires_in || 3600);
+            ok(tokenYT);
+          } else mal(new Error('sin-emergente'));
+        },
+        error_callback: function(){ mal(new Error('sin-emergente')); }
+      });
+      c.requestAccessToken();
+    });
+  });
+}
+
+function abrirEnMusic(lista){
+  var url = 'https://music.youtube.com/playlist?list=' + lista;
+  if(esAndroid()) location.href = intentDe(url);
+  else window.open(url, '_blank', 'noopener');
+}
+
 function apiYT(ruta, opciones){
   opciones = opciones || {};
   opciones.headers = {'Authorization':'Bearer ' + tokenYT, 'Content-Type':'application/json'};
@@ -3258,15 +3299,12 @@ function contar(txt){
 /* El gesto: tocar una lista guardada con el destino en Music la deja igual
    alla y la abre. Si nunca se mando, la crea. */
 function aYouTubeMusic(item, duena){
-  if(!clienteOauth()){ askOauth(); return; }
+  /* Abrir una lista que ya existe alla no necesita ningun permiso: el id
+     viaja con la sincronizacion, asi que un aparato que no puede pedir
+     permiso igual la abre. Se pide permiso solo si hay algo que escribir. */
+  if(!hayPermiso() && item.listaYT){ abrirEnMusic(item.listaYT); return; }
 
-  /* Sin permiso, la pagina se va a Google y vuelve: dejamos anotado que
-     estabamos por mandar esta lista. */
-  if(!hayPermiso()){
-    localStorage.setItem(PEND, JSON.stringify({carpeta: duena.id, item: item.ytId}));
-    irAPedirPermiso();
-    return;
-  }
+  if(!clienteOauth()){ askOauth(); return; }
 
   openModal('<h3>YouTube Music</h3><div class="body">' +
     '<p class="segnote" id="ytmsg">Preparando&hellip;</p>' +
@@ -3275,7 +3313,13 @@ function aYouTubeMusic(item, duena){
 
   var recienCreada = false;
 
-  Promise.resolve()
+  (hayPermiso() ? Promise.resolve() : permisoPorEmergente().catch(function(){
+      /* Bloqueada: se va por redireccion y al volver se retoma sola. */
+      contar('Pidiendo permiso a Google&hellip;');
+      localStorage.setItem(PEND, JSON.stringify({carpeta: duena.id, item: item.ytId}));
+      irAPedirPermiso();
+      throw new Error('yendo');
+    }))
     .then(function(){
       if(item.listaYT) return item.listaYT;
       contar('Creando <b>' + esc(item.title) + '</b> en tu cuenta&hellip;');
@@ -3325,7 +3369,7 @@ function aYouTubeMusic(item, duena){
       else window.open(url, '_blank', 'noopener');
     })
     .catch(function(err){
-      if(err.message === 'parcial') return;
+      if(err.message === 'parcial' || err.message === 'yendo') return;
       if(err.status === 401){
         /* Vencido o revocado: se tira y la proxima se vuelve a pedir. */
         olvidarToken();

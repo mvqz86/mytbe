@@ -171,11 +171,15 @@ Aplicacion web. El cliente tiene que tener las dos cosas:
 - **Origenes de JavaScript autorizados**: `https://mvqz86.github.io`
 - **URI de redireccionamiento autorizados**: `https://mvqz86.github.io/mytbe/`
 
-El permiso se pide por **redireccion**, no por ventana emergente: la pagina se
-va a Google y vuelve con el permiso en la direccion. La emergente es lo que usa
-la biblioteca de Google y Android la bloquea dentro de una app instalada, que
-es por lo que andaba en la compu y no en el telefono. De paso, la app dejo de
-depender de un script externo.
+**Abrir una lista que ya existe alla no necesita ningun permiso.** El id de la
+lista viaja con la sincronizacion, asi que se arma y se manda desde donde sea
+comodo —la compu— y en el telefono del auto se toca y se abre, sin cuenta, sin
+permiso y sin configurar nada.
+
+El permiso hace falta solo para **escribir**: crear la lista o ponerla al dia.
+Se pide primero por ventana emergente, que no exige registrar ninguna
+direccion; donde la bloquean —la app instalada en Android— cae por redireccion,
+que siempre funciona pero necesita la URI cargada arriba.
 
 ## Sincronizacion entre dispositivos
 
