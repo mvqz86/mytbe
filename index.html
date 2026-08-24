@@ -786,12 +786,27 @@ function hace(ts){
 /* Radio: el vivo actual del canal, aunque el stream se haya reiniciado. */
 var TOPE_LISTA = 50;
 
+/* A que app se le entrega lo que se dispara. Es del aparato, no del perfil:
+   el telefono del auto puede ir a YouTube Music y la compu seguir en YouTube.
+
+   Solo cambia para un video suelto. Una radio es una transmision en vivo y
+   una lista es el truco de watch_videos, y ninguna de las dos existe en
+   YouTube Music: esas siguen yendo a YouTube igual. */
+function aMusic(){ return localStorage.getItem('mytbe.destino') === 'music'; }
+
+var PAQUETE = {
+  yt:    'com.google.android.youtube',
+  music: 'com.google.android.apps.youtube.music'
+};
+
 /* YouTube arma una lista temporal al vuelo con watch_videos: contesta un
    redirect a watch?v=<primero>&list=TLGG..., y de ahi en mas encadena el solo,
    con su reproductor y su boton de siguiente. Sin timer, sin que mytbe tenga
    que quedarse despierta y sin gastar cuota: es una direccion, nada mas.
    La lista no queda guardada en la cuenta, que es justo lo que queremos. */
 function urlFor(item){
+  if(item.kind === 'video' && aMusic())
+    return 'https://music.youtube.com/watch?v=' + item.ytId;
   if(item.kind === 'playlist')
     return 'https://www.youtube.com/watch_videos?video_ids=' +
            (item.ytIds || []).slice(0, TOPE_LISTA).join(',');
@@ -806,8 +821,9 @@ function urlFor(item){
 function esAndroid(){ return /Android/i.test(navigator.userAgent); }
 
 function intentDe(url){
+  var app = url.indexOf('music.youtube.com') > -1 ? PAQUETE.music : PAQUETE.yt;
   return 'intent://' + url.replace('https://', '') +
-         '#Intent;scheme=https;package=com.google.android.youtube;' +
+         '#Intent;scheme=https;package=' + app + ';' +
          'S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
 }
 
@@ -2975,6 +2991,15 @@ function askConfig(){
       '<button class="close" data-bajar>Descargar copia</button>' +
       '<button class="close" data-subir>Restaurar copia</button>' +
 
+      '<div class="hint">Al disparar</div>' +
+      '<p class="segnote">A que app se le entrega lo que tocas. YouTube Music aparece ' +
+      'en Android Auto con el tema en pantalla; YouTube no. Ojo: no todo video existe ' +
+      'en Music, y las radios y las listas van a YouTube igual.</p>' +
+      '<div class="seg" id="segdest">' +
+        '<button data-dest="" class="' + (aMusic() ? '' : 'on') + '">YouTube</button>' +
+        '<button data-dest="music" class="' + (aMusic() ? 'on' : '') + '">YouTube Music</button>' +
+      '</div>' +
+
       '<div class="hint">Sincronizacion</div>' +
       '<p class="segnote">Estado: <span id="cfgsync"' + (syncMal ? ' class="mal"' : '') + '>' +
         esc(syncDice) + '</span></p>' +
@@ -2983,6 +3008,14 @@ function askConfig(){
       '<button class="close" data-cancel>Cerrar</button>' +
     '</div>',
     function(e){
+      var d = e.target.closest('[data-dest]');
+      if(d){
+        localStorage.setItem('mytbe.destino', d.dataset.dest);
+        [].forEach.call($('#segdest').children, function(b){
+          b.classList.toggle('on', b.dataset.dest === d.dataset.dest);
+        });
+        return;
+      }
       if(e.target.closest('[data-bajar]')){ closeModal(); descargarRespaldo(); return; }
       if(e.target.closest('[data-subir]')){ closeModal(); $('#file').click(); return; }
       if(e.target.closest('[data-sync]')){ closeModal(); askSync(); return; }
