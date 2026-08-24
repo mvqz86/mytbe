@@ -284,6 +284,16 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .cp .cn{margin-left:auto;font-size:10px;color:var(--ink-3);font-weight:normal;flex:none}
 .cp:active{background:var(--x-hit)}
 .rayita{height:1px;background:var(--line);margin:6px 8px}
+
+/* Acomodando carpetas: cada fila gana sus flechas y se puede arrastrar. */
+.cp.acomodando{cursor:grab}
+.cp.encima{background:var(--sel);color:#fff}
+.cp .fdel{display:flex;gap:2px;margin-left:auto;flex:none}
+.cp .fdel button{width:22px;height:22px;padding:0;border-radius:4px;font-size:8px;
+  border:1px solid var(--edge);background:none;color:var(--ink-2)}
+.cp .fdel button:disabled{opacity:.3}
+.ladopie{padding:8px;border-top:1px solid var(--line);display:flex;gap:5px}
+.ladopie button{flex:1;padding:7px 8px;font-size:11px}
 .tabla{flex:1;min-width:0;padding:14px 12px}
 
 /* el boton que reemplaza la columna en pantalla angosta */
@@ -880,7 +890,7 @@ var modoOrden = false;            /* la lista guardada se esta reordenando */
 var modoElegir = false, elegidos = [];
 /* Que carpeta esta elegida en la columna, por solapa. En memoria: es donde
    estas parado, no algo que valga la pena guardar. */
-var elegida = {}, ladoAbierto = false;
+var elegida = {}, ladoAbierto = false, modoCarpetas = false, arrastrando = null;
 
 function posicionElegido(ytId){
   for(var i = 0; i < elegidos.length; i++) if(elegidos[i].ytId === ytId) return i;
@@ -1299,15 +1309,93 @@ function columnaCarpetas(solapa, raiz){
 
   html += '<div class="cps">';
   (function nivel(padre, prof){
-    hijasDe(padre).forEach(function(c){
-      html += '<button class="cp' + (prof ? ' hija' : '') + (c.id === raiz.id ? ' on' : '') +
-        '" data-alcance="' + esc(c.id) + '"><span class="nm">' + esc(c.name) + '</span>' +
-        '<span class="cn">' + cuentaDe(c) + '</span></button>';
+    var hs = hijasDe(padre), ultima = hs.length - 1;
+    hs.forEach(function(c, i){
+      var clases = 'cp' + (prof ? ' hija' : '') + (c.id === raiz.id ? ' on' : '') +
+                   (modoCarpetas ? ' acomodando' : '');
+      html += '<div class="' + clases + '"' +
+        (modoCarpetas ? ' draggable="true" data-arrastra="' + esc(c.id) + '"'
+                      : ' data-alcance="' + esc(c.id) + '"') + '>' +
+        '<span class="nm">' + esc(c.name) + '</span>' +
+        (modoCarpetas
+          ? '<span class="fdel">' +
+              '<button data-subec="' + esc(c.id) + '" title="Subir"' + (i === 0 ? ' disabled' : '') + '>&#9650;</button>' +
+              '<button data-bajac="' + esc(c.id) + '" title="Bajar"' + (i === ultima ? ' disabled' : '') + '>&#9660;</button>' +
+              '<button data-moverc="' + esc(c.id) + '" title="Meter adentro de otra">&#8618;</button>' +
+            '</span>'
+          : '<span class="cn">' + cuentaDe(c) + '</span>') +
+      '</div>';
       nivel(c.id, prof + 1);
     });
   })(solapa.id, 0);
-  html += '</div></div>';
+  html += '</div>';
+
+  html += '<div class="ladopie"><button data-acomodar>' +
+    (modoCarpetas ? 'listo' : 'acomodar') + '</button></div>';
+
+  html += '</div>';
   return html;
+}
+
+/* ---- acomodar carpetas ---- */
+/* Las hermanas viven salteadas en db.folders, asi que subir una es cambiarla
+   de lugar con la hermana anterior, no con el vecino del array. */
+function moverCarpeta(id, paso){
+  var c = carpetaPorId(id);
+  var hs = hijasDe(c.padre || null);
+  var i = hs.indexOf(c), j = i + paso;
+  if(j < 0 || j >= hs.length) return;
+  var a = db.folders.indexOf(c), b = db.folders.indexOf(hs[j]);
+  db.folders[a] = hs[j];
+  db.folders[b] = c;
+  save();
+  render();
+}
+
+/* Una carpeta no puede meterse adentro de si misma ni de una hija suya. */
+function puedeIrA(id, destino){
+  if(id === destino) return false;
+  var r = rutaDe(destino);
+  for(var i = 0; i < r.length; i++) if(r[i].id === id) return false;
+  return true;
+}
+
+function meterEn(id, destino){
+  if(!puedeIrA(id, destino)) return;
+  var c = carpetaPorId(id);
+  c.padre = (destino === '@raiz' ? null : destino);
+  c.nombreEn = Date.now();
+  save();
+  render();
+}
+
+function askMoverCarpeta(id){
+  var c = carpetaPorId(id);
+  var solapa = rutaDe(id)[0];
+  var opciones = '';
+  (function nivel(padre, prof){
+    hijasDe(padre).forEach(function(x){
+      if(puedeIrA(id, x.id))
+        opciones += '<button class="pick" data-destino="' + esc(x.id) + '"' +
+          (prof ? ' style="padding-left:' + (10 + prof * 15) + 'px"' : '') + '>' +
+          (prof ? '&rsaquo; ' : '') + esc(x.name) + '</button>';
+      nivel(x.id, prof + 1);
+    });
+  })(solapa.id, 0);
+
+  openModal(
+    '<h3>Mover ' + esc(c.name) + '</h3><div class="body">' +
+      '<p>Adentro de cual va?</p>' +
+      '<button class="pick" data-destino="' + esc(solapa.id) + '">' +
+        esc(solapa.name) + ' <small>al primer nivel</small></button>' +
+      opciones +
+      '<button class="close" data-cancel>Cancelar</button>' +
+    '</div>',
+    function(e){
+      if(e.target.closest('[data-cancel]')){ closeModal(); return; }
+      var d = e.target.closest('[data-destino]');
+      if(d){ closeModal(); meterEn(id, d.dataset.destino); }
+    });
 }
 
 /* Re-dibujar el panel se lleva puesto el foco del campo: hay que devolverlo
@@ -1812,7 +1900,8 @@ if(window.matchMedia){
 
 $('#tabs').addEventListener('click', function(e){
   var t = e.target.closest('[data-tab]');
-  if(t){ current = t.dataset.tab; results = null; modoOrden = false; ladoAbierto = false; render(); return; }
+  if(t){ current = t.dataset.tab; results = null; modoOrden = false; ladoAbierto = false;
+         modoCarpetas = false; render(); return; }
   /* Ojo: modoElegir sobrevive al cambio de solapa. Es el punto: juntar cosas
      de carpetas y de solapas distintas en una misma lista. */
   if(e.target.closest('[data-newfolder]')) askNewFolder();
@@ -1937,6 +2026,14 @@ $('#panel').addEventListener('click', function(e){
     render();
     return;
   }
+  if(e.target.closest('[data-acomodar]')){
+    modoCarpetas = !modoCarpetas;
+    render();
+    return;
+  }
+  if((a = e.target.closest('[data-subec]'))){ moverCarpeta(a.dataset.subec, -1); return; }
+  if((a = e.target.closest('[data-bajac]'))){ moverCarpeta(a.dataset.bajac,  1); return; }
+  if((a = e.target.closest('[data-moverc]'))){ askMoverCarpeta(a.dataset.moverc); return; }
   if((a = e.target.closest('[data-alcance]'))){
     elegida[current] = a.dataset.alcance;
     filtro = '';
@@ -2912,6 +3009,38 @@ $('#f-lista').onclick = function(){
 function estadoRed(){ $('#cinta').hidden = navigator.onLine; }
 window.addEventListener('online',  estadoRed);
 window.addEventListener('offline', estadoRed);
+
+/* Arrastrar una carpeta encima de otra la mete adentro. Anda con mouse; en
+   tactil el navegador no dispara estos eventos, y para eso estan las flechas
+   y el boton de mover, que funcionan en los dos lados. */
+$('#panel').addEventListener('dragstart', function(e){
+  var c = e.target.closest('[data-arrastra]');
+  if(!c) return;
+  arrastrando = c.dataset.arrastra;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', arrastrando); } catch(x){}
+});
+
+$('#panel').addEventListener('dragover', function(e){
+  var c = e.target.closest('[data-arrastra]');
+  if(!c || !arrastrando || !puedeIrA(arrastrando, c.dataset.arrastra)) return;
+  e.preventDefault();
+  c.classList.add('encima');
+});
+
+$('#panel').addEventListener('dragleave', function(e){
+  var c = e.target.closest('[data-arrastra]');
+  if(c) c.classList.remove('encima');
+});
+
+$('#panel').addEventListener('drop', function(e){
+  var c = e.target.closest('[data-arrastra]');
+  if(!c || !arrastrando) return;
+  e.preventDefault();
+  c.classList.remove('encima');
+  meterEn(arrastrando, c.dataset.arrastra);
+  arrastrando = null;
+});
 
 /* El filtro no pasa por render(): redibuja solo el panel y devuelve el foco. */
 $('#panel').addEventListener('input', function(e){
