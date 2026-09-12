@@ -598,6 +598,17 @@ function getKey(){ return localStorage.getItem('mytbe.key') || ''; }
 function setKey(k){ localStorage.setItem('mytbe.key', k.trim()); }
 function claveValida(k){ return k.indexOf('AIza') === 0 && k.length >= 20; }
 
+/* El que guardo el enlace de alta pega el enlace entero, no la clave pelada, y
+   se comia un "esa clave no parece valida" teniendola delante. Sacamos la
+   clave de adentro de lo que venga: enlace, mensaje de chat o la clave sola. */
+function claveDeLoPegado(t){
+  var s = String(t == null ? '' : t).trim();
+  if(claveValida(s)) return s;
+  try { s = decodeURIComponent(s); } catch(e){}
+  var m = /AIza[A-Za-z0-9_-]{15,}/.exec(s);
+  return m ? m[0] : '';
+}
+
 /* La clave puede viajar en el enlace: .../mytbe/#k=AIza...
    Asi se pone en un telefono nuevo sin volver a tipearla. La sacamos de la
    barra apenas la guardamos, para que no quede a la vista ni en el historial. */
@@ -795,7 +806,7 @@ function hace(ts){
 
 /* ============ lanzar a YouTube ============ */
 /* Radio: el vivo actual del canal, aunque el stream se haya reiniciado. */
-var VERSION = '2026-08-24';
+var VERSION = '2026-09-12';
 
 var TOPE_LISTA = 50;
 
@@ -1892,7 +1903,8 @@ function askKey(){
 
   openModal(
     '<h3>Clave de API</h3><div class="body">' +
-    '<p>Pega tu clave de YouTube Data API v3. Queda guardada en este navegador.</p>' +
+    '<p>Pega tu clave de YouTube Data API v3, o el enlace entero que te pasaron. ' +
+    'Queda guardada en este navegador.</p>' +
     '<input type="text" id="keyin" placeholder="AIza..." autocomplete="off" spellcheck="false" ' +
     'style="width:100%;margin-bottom:10px" value="' + esc(getKey()) + '">' +
     '<p class="segnote" id="keymsg">Para otro dispositivo: guardala aca, copia el enlace y abrilo alla una sola vez. El enlace lleva la clave adentro, no lo publiques.</p>' +
@@ -1901,15 +1913,15 @@ function askKey(){
     '<button class="close" data-cancel>Cancelar</button></div>',
     function(e){
       if(e.target.closest('#keysave')){
-        var v = $('#keyin').value.trim();
-        if(!claveValida(v)){ decir('Esa clave no parece valida: todas empiezan con AIza.'); return; }
+        var v = claveDeLoPegado($('#keyin').value);
+        if(!v){ decir('Ahi adentro no encuentro ninguna clave. Sirve la clave sola o el enlace entero.'); return; }
         setKey(v);
         closeModal();
         if($('#q').value.trim()) doSearch();
         return;
       }
       if(e.target.closest('#keycopy')){
-        var k = $('#keyin').value.trim() || getKey();
+        var k = claveDeLoPegado($('#keyin').value) || getKey();
         if(!claveValida(k)){ decir('Primero pega una clave valida y despues copia el enlace.'); return; }
         setKey(k);                                  /* copiar tambien guarda */
         var url = location.origin + location.pathname + '#k=' + encodeURIComponent(k);
