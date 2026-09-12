@@ -2768,9 +2768,15 @@ function arrancar(){
 
   var p = perfilPorId(localStorage.getItem(ACTUAL)) || perfiles[0];
 
-  /* Con un solo perfil sin contrasena no hay a quien preguntarle nada: la app
-     abre igual que siempre. El candado aparece recien cuando hace falta. */
-  if(perfiles.length === 1 && !p.sal){ entrar(p, null); return; }
+  /* El candado sirve para descifrar, no para elegir: sin contrasena no hay
+     nada que preguntar. Se vuelve al ultimo que entro, que es el dueno del
+     aparato, y cambiar de perfil vive en el munequito de arriba. Preguntarlo
+     en cada apertura era una pantalla por sesion a cambio de nada. */
+  if(p && !p.sal){ entrar(p, null); return; }
+  /* Con contrasena no hay atajo: los datos estan cifrados con ella. Pero
+     elegirse a uno mismo de una lista de uno antes de tipearla es un toque
+     regalado; el cuadro ya trae Volver para llegar a los otros perfiles. */
+  if(p){ pedirClave(p); return; }
   pedirPerfil();
 }
 
@@ -2842,6 +2848,7 @@ var perfilPidiendo = null;
 
 function pedirClave(perfil){
   perfilPidiendo = perfil;
+  $('#candado').hidden = false;
   $('#cbox').innerHTML =
     '<div class="box"><h3>' + esc(perfil.nombre) + '</h3><div class="body">' +
       '<p>Tu contrasena para abrir este perfil.</p>' +
