@@ -2941,10 +2941,11 @@ function askNuevoPerfil(){
       '<p>Sus carpetas y sus recientes, aparte de los tuyos. Vive solo en este aparato.</p>' +
       '<input type="text" id="np" placeholder="Nombre" maxlength="20" autocomplete="off" ' +
       'style="width:100%;margin-bottom:8px">' +
-      '<input type="password" id="nc" placeholder="Contrasena (puede ser un numero)" ' +
+      '<input type="password" id="nc" placeholder="Contrasena (opcional, dejala vacia)" ' +
       'autocomplete="new-password" style="width:100%;margin-bottom:10px">' +
-      '<p class="segnote" id="npmsg">Sin contrasena, sus carpetas quedan a la vista de cualquiera. ' +
-      'Con contrasena no hay forma de recuperarlas si se olvida.</p>' +
+      '<p class="segnote" id="npmsg"><b>Dejala vacia si este aparato ya se desbloquea solo.</b> ' +
+      'Con contrasena, la app la pide <b>cada vez que se abre</b> —no hay forma de saltearla, ' +
+      'porque cifra las carpetas— y si se olvida no las recupera nadie.</p>' +
       '<button class="close" data-crear>Crear</button>' +
       '<button class="close" data-cancel>Cancelar</button>' +
     '</div>',
@@ -2981,7 +2982,8 @@ function askClavePerfil(){
   var p = perfilActual;
   openModal(
     '<h3>Contrasena</h3><div class="body">' +
-      '<p>De aca en mas, <b>' + esc(p.nombre) + '</b> se guarda cifrado y pide esto para abrir.</p>' +
+      '<p>De aca en mas, <b>' + esc(p.nombre) + '</b> se guarda cifrado y pide esto ' +
+      '<b>cada vez que se abre la app</b>.</p>' +
       '<input type="password" id="c1" placeholder="Contrasena nueva" autocomplete="new-password" ' +
       'style="width:100%;margin-bottom:8px">' +
       '<input type="password" id="c2" placeholder="Otra vez" autocomplete="new-password" ' +
