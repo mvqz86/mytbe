@@ -2294,7 +2294,12 @@ function paquete(){
     folders: db.folders,
     borrados: db.borrados,
     reproducidos: db.reproducidos,
-    vaciadoEn: db.vaciadoEn || 0
+    vaciadoEn: db.vaciadoEn || 0,
+    /* Sin esto, un aparato que perdio el localStorage recuperaba las carpetas
+       y se veia normal, pero la primera busqueda volvia a pedir la clave: lo
+       unico que hace falta para buscar era lo unico que no viajaba. */
+    clave: getKey(),
+    cliente: clienteOauth()
   };
 }
 
@@ -2384,7 +2389,11 @@ function fusionar(local, remoto){
     borrados: borrados,
     vaciadoEn: Math.max(local.vaciadoEn || 0, remoto.vaciadoEn || 0),
     reproducidos: unirReproducidos(local.reproducidos, remoto.reproducidos,
-                                   Math.max(local.vaciadoEn || 0, remoto.vaciadoEn || 0))
+                                   Math.max(local.vaciadoEn || 0, remoto.vaciadoEn || 0)),
+    /* Manda la de este aparato: el gist rellena al que no tiene, nunca pisa
+       a una puesta a mano. */
+    clave:   local.clave   || remoto.clave   || '',
+    cliente: local.cliente || remoto.cliente || ''
   };
 }
 
@@ -2474,6 +2483,8 @@ function aplicar(unido){
   db.borrados     = unido.borrados;
   db.reproducidos = unido.reproducidos;
   db.vaciadoEn    = unido.vaciadoEn;
+  if(unido.clave && !getKey()) setKey(unido.clave);
+  if(unido.cliente && !clienteOauth()) localStorage.setItem(OA, unido.cliente);
   if(!db.folders.some(function(f){ return f.id === current; }) && current !== RECIENTES)
     current = db.folders[0].id;
   save();
@@ -2524,7 +2535,9 @@ function sincronizar(manual){
       var nuevo = paquete();
       /* Si el gist ya dice exactamente esto, no lo escribimos de nuevo. */
       if(JSON.stringify(remoto.folders) === JSON.stringify(nuevo.folders) &&
-         JSON.stringify(remoto.reproducidos) === JSON.stringify(nuevo.reproducidos)) return null;
+         JSON.stringify(remoto.reproducidos) === JSON.stringify(nuevo.reproducidos) &&
+         (remoto.clave || '') === nuevo.clave &&
+         (remoto.cliente || '') === nuevo.cliente) return null;
       return subirGist(g, nuevo);
     })
     .then(function(){
