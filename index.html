@@ -437,6 +437,29 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .chico .pagefoot{display:none}
 .chico .pal{display:none}
 
+/* Mosaico: en media pantalla una fila por cosa deja ver tres. En grilla,
+   la miniatura arriba y el titulo abajo, entran cuatro por renglon. Todo lo
+   que no es una fila (filtro, encabezados, pie) ocupa el ancho entero.
+   Ordenando vuelve a la lista: las flechas necesitan la fila. */
+.mosaico,.mosaico .tabla{display:grid;gap:6px;
+  grid-template-columns:repeat(auto-fill,minmax(88px,1fr));align-content:start}
+.mosaico > :not(.row),.mosaico .tabla > :not(.row){grid-column:1/-1}
+.mosaico .row,.mosaico .row.compact{position:relative;flex-direction:column;align-items:stretch;
+  gap:3px;margin:0;padding:3px;border:none;border-radius:6px}
+.mosaico .row + .row{margin-top:0}
+.mosaico .tapa{line-height:0}
+.mosaico .row .th,.mosaico .row.compact .th{width:100%;height:auto;aspect-ratio:16/9;border-radius:5px}
+.mosaico .info{width:100%}
+.mosaico .ttl,.mosaico .row.compact .ttl,.mosaico .row.lista .ttl{font-size:11px;line-height:1.25;
+  margin:0;white-space:normal;display:-webkit-box;-webkit-line-clamp:2}
+.mosaico .sub,.mosaico .x{display:none}
+.mosaico .chip{font-size:8.5px;padding:0 3px}
+.mosaico .add{position:absolute;top:5px;right:5px;width:26px;height:26px;font-size:15px;
+  border-radius:4px;opacity:.92}
+.mosaico .add.on{background:var(--panel);font-size:13px}
+.mosaico .add.vacio{display:none}
+.mosaico .grupo{margin-left:-8px;margin-right:-8px}
+
 /* ---- candado ----
    Opaco, no translucido: mientras no se abrio un perfil no hay nada atras
    que valga la pena dejar entrever. */
@@ -1019,6 +1042,8 @@ function sombrasTabs(){
 }
 
 function render(){
+  $('#panel').classList.toggle('mosaico',
+    document.documentElement.classList.contains('chico') && !modoOrden);
   completarDuras();
   barraLista();
   renderTabs();
@@ -2031,6 +2056,7 @@ $('#chicolink').onclick = function(){
        else   localStorage.removeItem('mytbe.chico'); }catch(e){}
   aplicarChico();
   sombrasTabs();
+  render();
 };
 aplicarChico();
 
