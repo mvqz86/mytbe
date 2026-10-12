@@ -17,6 +17,7 @@
   try{
     var t = localStorage.getItem('mytbe.tema');
     if(t) document.documentElement.setAttribute('data-theme', t);
+    if(localStorage.getItem('mytbe.chico')) document.documentElement.classList.add('chico');
   }catch(e){}
 })();
 </script>
@@ -399,6 +400,43 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .pagefoot #syncestado.mal{color:var(--red-text)}
 .loading{text-align:center;padding:44px;color:var(--ink-3);font-size:12px}
 
+/* ---- vista chica ----
+   Para pantalla dividida con YouTube abajo: la app queda en media pantalla
+   y cada renglon que sobra es scroll. El encabezado pasa a una linea, la
+   busqueda y sus dos botones a otra, y se van los relleno y el pie. */
+.ico.on{background:var(--x-hit)}
+.chico body{padding:3px 4px 4px}
+.chico .top{align-items:center;padding:0 2px 3px}
+.chico .logo{font-size:19px}
+.chico .logo .b{border-radius:5px;padding:1px 4px 2px}
+.chico .topright br{display:none}
+.chico #quota{margin-right:4px}
+.chico .ico{width:30px;height:28px;font-size:15px}
+.chico .tab{padding:9px 11px 8px}
+.chico .tab.on{padding-bottom:9px}
+.chico .tab.nueva{padding:7px 12px 6px}
+.chico .bluebar{display:flex;align-items:center;gap:5px;padding:5px 6px}
+.chico .row1{flex:1;min-width:0;flex-wrap:nowrap;gap:5px}
+.chico .row1 label,.chico .hueco{display:none}
+.chico .row1 input[type=text]{min-width:60px;padding:4px 5px}
+.chico .row2{margin:0;gap:5px;flex:none}
+.chico .bluebar button{padding:7px 9px}
+.chico .barralista{padding:5px 8px}
+.chico .panel{padding:6px 8px;min-height:0;border-radius:0 0 8px 8px}
+.chico .dos{margin:-6px -8px;min-height:0}
+.chico .tabla{padding:6px 8px}
+.chico .btnlado{padding:5px 8px;margin-bottom:6px}
+.chico .filtro{margin-bottom:4px}
+.chico .filtro input{padding:3px 5px}
+.chico .row{padding:6px 4px}
+.chico .row .th{width:72px;height:54px}
+.chico .row.compact{padding:3px 6px}
+.chico .row.compact .th{width:56px;height:32px}
+.chico .grupo{margin:8px -8px 2px;padding:5px 8px 4px}
+.chico .grupo:first-child{margin-top:0}
+.chico .pagefoot{display:none}
+.chico .pal{display:none}
+
 /* ---- candado ----
    Opaco, no translucido: mientras no se abrio un perfil no hay nada atras
    que valga la pena dejar entrever. */
@@ -485,7 +523,8 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
     <div class="logo"><span class="a">my</span><span class="b">tbe</span></div>
     <div class="topright">
       <span id="quota">0/100 hoy</span><br>
-      <a id="themelink" class="ico" title="Modo oscuro">&#127769;</a><!--
+      <a id="chicolink" class="ico" title="Vista chica">&#129295;</a><!--
+   --><a id="themelink" class="ico" title="Modo oscuro">&#127769;</a><!--
    --><a id="keylink" class="ico" title="Clave de API">&#128273;</a><!--
    --><a id="perfillink" class="ico" title="Perfil">&#128100;</a><!--
    --><a id="menulink" class="ico" title="Configuracion">&#9881;&#65039;</a>
@@ -502,8 +541,8 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
     </div>
     <div class="row2">
       <span class="hueco" aria-hidden="true">Buscar:</span>
-      <button id="f-live" class="vivo" aria-pressed="false">&#128308; en vivo</button>
-      <button id="f-lista" class="vivo" aria-pressed="false">&#9654; playlist</button>
+      <button id="f-live" class="vivo" aria-pressed="false">&#128308;<span class="pal"> en vivo</span></button>
+      <button id="f-lista" class="vivo" aria-pressed="false">&#9654;<span class="pal"> playlist</span></button>
     </div>
   </div>
 
@@ -1979,6 +2018,21 @@ $('#themelink').onclick = function(){
   localStorage.setItem('mytbe.tema', temaEfectivo() === 'dark' ? 'light' : 'dark');
   aplicarTema();
 };
+
+/* ============ vista chica ============ */
+function aplicarChico(){
+  var on = document.documentElement.classList.contains('chico');
+  $('#chicolink').classList.toggle('on', on);
+  $('#chicolink').title = on ? 'Vista normal' : 'Vista chica';
+}
+$('#chicolink').onclick = function(){
+  var on = document.documentElement.classList.toggle('chico');
+  try{ if(on) localStorage.setItem('mytbe.chico', '1');
+       else   localStorage.removeItem('mytbe.chico'); }catch(e){}
+  aplicarChico();
+  sombrasTabs();
+};
+aplicarChico();
 
 /* Si nunca eligio a mano, seguimos al sistema cuando cambia solo */
 if(window.matchMedia){
