@@ -2130,6 +2130,34 @@ function askNewFolder(padre){
 
 /* Ojo con el orden: la fila entera es el area de disparo, asi que las acciones
    que viven dentro de ella se evaluan primero o quedarian tapadas por closest(). */
+/* ---- deslizar para cambiar de solapa ----
+   Solo sobre el panel: la fila de solapas ya se desliza sola y el buscador
+   es para escribir. Lo que arranca pegado al borde es el "atras" de Android.
+   Tiene que ser claramente de costado, si no es un scroll torcido. Hace lo
+   mismo que tocar la solapa vecina, asi que no hay otra logica que cuidar. */
+(function(){
+  var x0, y0, t0;
+  $('#panel').addEventListener('touchstart', function(e){
+    var t = e.touches[0];
+    x0 = (e.touches.length === 1 && t.clientX > 24 && t.clientX < window.innerWidth - 24)
+      ? t.clientX : null;
+    y0 = t.clientY; t0 = Date.now();
+  }, {passive:true});
+  $('#panel').addEventListener('touchend', function(e){
+    if(x0 == null) return;
+    var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if(Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) / 2 || Date.now() - t0 > 700) return;
+    if(!$('#modal').hidden || !$('#candado').hidden) return;
+    var ids = hijasDe(null).map(function(f){ return f.id; }).concat(RECIENTES);
+    var i = ids.indexOf(current === RECIENTES ? RECIENTES : raizDe(current));
+    var otra = ids[i + (dx < 0 ? 1 : -1)];
+    if(i < 0 || !otra) return;
+    var b = $('#tabs').querySelector('[data-tab="' + otra + '"]');
+    if(b) b.click();
+  }, {passive:true});
+})();
+
 $('#panel').addEventListener('click', function(e){
   var a;
 
