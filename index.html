@@ -1400,10 +1400,10 @@ function renderFolder(){
     html += ' &middot; <a data-nuevasub>' + esc(tipoHijaDe(raiz.id)) + ' nueva</a>';
     if(total > 1)             html += ' &middot; <a data-orden>ordenar</a>';
     if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar ' + esc(tipoDe(raiz)) + '</a>';
-    /* Correr la solapa entera un lugar. Solo con la solapa misma a la vista:
-       con una carpeta de adentro elegida, las flechas no dirian que mueven. */
+    /* Correr la solapa entera un lugar, aunque haya una carpeta de adentro
+       elegida: en el telefono una solapa con carpetas casi nunca se ve entera. */
     var sols = hijasDe(null), ps = sols.indexOf(f);
-    if(raiz === f && sols.length > 1){
+    if(sols.length > 1){
       html += ' &middot; <span class="corre">' +
         (ps > 0 ? '<a data-solapa="-1" title="Correr la solapa a la izquierda">&#9664;</a>' : '') +
         (ps < sols.length - 1 ? '<a data-solapa="1" title="Correr la solapa a la derecha">&#9654;</a>' : '') +
