@@ -392,6 +392,7 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .cinta{background:var(--bar);border:1px solid var(--edge);border-top:none;
   font-size:11px;color:var(--ink-4);padding:7px 12px;text-align:center}
 .cinta[hidden]{display:none}
+.corre a{display:inline-block;padding:4px 9px;text-decoration:none}
 .foot{margin-top:14px;padding-top:10px;border-top:1px solid var(--line);
   font-size:11px;color:var(--ink-3)}
 /* Pie de pagina, como los del sitio de la epoca */
@@ -1399,6 +1400,15 @@ function renderFolder(){
     html += ' &middot; <a data-nuevasub>' + esc(tipoHijaDe(raiz.id)) + ' nueva</a>';
     if(total > 1)             html += ' &middot; <a data-orden>ordenar</a>';
     if(db.folders.length > 1) html += ' &middot; <a data-delfolder>borrar ' + esc(tipoDe(raiz)) + '</a>';
+    /* Correr la solapa entera un lugar. Solo con la solapa misma a la vista:
+       con una carpeta de adentro elegida, las flechas no dirian que mueven. */
+    var sols = hijasDe(null), ps = sols.indexOf(f);
+    if(raiz === f && sols.length > 1){
+      html += ' &middot; <span class="corre">' +
+        (ps > 0 ? '<a data-solapa="-1" title="Correr la solapa a la izquierda">&#9664;</a>' : '') +
+        (ps < sols.length - 1 ? '<a data-solapa="1" title="Correr la solapa a la derecha">&#9654;</a>' : '') +
+        '</span>';
+    }
   }
   html += '</div>';
   if(conLado) html += '</div></div>';
@@ -2137,6 +2147,10 @@ $('#panel').addEventListener('click', function(e){
         db.borrados[fr.id + '|' + id] = Date.now();
         save(); render();
       });
+    return;
+  }
+  if((a = e.target.closest('[data-solapa]'))){
+    moverCarpeta(current, +a.dataset.solapa);
     return;
   }
   if(e.target.closest('[data-delfolder]')){
