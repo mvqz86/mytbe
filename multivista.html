@@ -81,6 +81,19 @@ function fuente(q){
                  : base + 'live_stream?channel=' + q.c + '&' + ps;
 }
 
+/* vivos.json lo escribe GitHub cada hora (.github/vivos.py) para los canales
+   que el reproductor por canal no resuelve: es lo mas fresco que hay, asi que
+   va primero. Si no llega rapido se arma igual, sin el. */
+var deGitHub = {};
+function traerVivos(){
+  var tarde = new Promise(function(ok){ setTimeout(ok, 2500); });
+  var pedido = fetch('vivos.json', {cache:'no-store'})
+    .then(function(r){ return r.ok ? r.json() : {}; })
+    .then(function(d){ deGitHub = (d && d.vivos) || {}; })
+    .catch(function(){});
+  return Promise.race([pedido, tarde]);
+}
+
 function armar(){
   if(!lista.length){
     grilla.innerHTML = '<div class="vacio">No hay canales elegidos.</div>';
@@ -99,7 +112,8 @@ function armar(){
   cuadros = lista.map(function(x, i){
     var el = document.getElementById('q' + i);
     var q = {c:x.c, t:x.t, el:el, frame:el.querySelector('iframe'),
-             video: vivos[x.c] || '', paso: vivos[x.c] ? 1 : 2};
+             video: deGitHub[x.c] || vivos[x.c] || '',
+             paso: (deGitHub[x.c] || vivos[x.c]) ? 1 : 2};
     q.frame.addEventListener('load', function(){ escuchar(q, i); });
     cargar(q);
     return q;
@@ -201,7 +215,7 @@ document.getElementById('volver').onclick = function(){
   if(history.length > 1) history.back(); else location.href = './';
 };
 
-armar();
+traerVivos().then(armar);
 </script>
 </body>
 </html>

@@ -1,0 +1,30 @@
+name: Vivos de la multivista
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - vivos-canales.json
+      - .github/vivos.py
+      - .github/workflows/vivos.yml
+
+permissions:
+  contents: write
+
+jobs:
+  vivos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 .github/vivos.py
+      - name: Guardar si cambio
+        run: |
+          if [ -n "$(git status --porcelain vivos.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add vivos.json
+            git commit -m "Vivos de la multivista"
+            git push
+          fi
