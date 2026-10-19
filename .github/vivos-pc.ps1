@@ -23,7 +23,10 @@ try {
   & $git fetch -q origin
   & $git reset -q --hard origin/main
 
+  # Python escribe en UTF-8 y PowerShell tiene que leerlo igual, o la ñ de
+  # "Español" llega rota al registro.
   $env:PYTHONIOENCODING = 'utf-8'
+  [Console]::OutputEncoding = [Text.Encoding]::UTF8
   $salida = & $python .github/vivos.py 2>&1 | Out-String
   Anotar ($salida.Trim() -replace "`r?`n", ' | ')
 
