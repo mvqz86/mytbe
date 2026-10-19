@@ -36,19 +36,61 @@ html,body{margin:0;height:100%;background:#000;color:#ddd;overflow:hidden;
 .aviso .ir{color:#fff;font-weight:bold;text-decoration:none;background:#c00;border-radius:6px;
   padding:7px 12px}
 .vacio{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888}
+
+/* Panel de canales: se abre encima de la grilla, sin achicarla, asi los
+   vivos no se reacomodan cada vez que se lo mira. */
+.velo{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.35)}
+.velo[hidden],.panel[hidden]{display:none}
+.panel{position:fixed;top:0;bottom:0;left:0;z-index:9;width:min(290px,85vw);
+  background:#16191e;border-right:1px solid #333;display:flex;flex-direction:column;
+  box-shadow:4px 0 18px rgba(0,0,0,.6)}
+.panel .cab{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #2a2e35}
+.panel .cab b{flex:1;font-size:13px;color:#fff}
+.panel .cab b.lleno{color:#e66}
+.panel .cab button{font:bold 15px/1 Arial,Helvetica,sans-serif;color:#fff;background:none;
+  border:1px solid #444;border-radius:6px;width:32px;height:28px;padding:0}
+.panel .lista{overflow-y:auto;flex:1;padding:4px 0 12px}
+.panel .grupo{padding:12px 12px 4px;font:bold 10.5px Arial,Helvetica,sans-serif;
+  letter-spacing:.1em;text-transform:uppercase;color:#888}
+.panel .can{display:flex;align-items:center;gap:9px;width:100%;padding:9px 12px;border:0;
+  background:none;color:#ddd;font:13px Arial,Helvetica,sans-serif;text-align:left;cursor:pointer}
+.panel .can:active{background:#252a31}
+.panel .can .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.panel .can .mk{width:20px;height:20px;flex:none;border:1px solid #555;border-radius:4px;
+  display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.panel .can.on{color:#fff;font-weight:bold}
+.panel .can.on .mk{background:#3f6da4;border-color:#3f6da4}
+.panel .can.tope{opacity:.35}
 </style>
 </head>
 <body>
 
-<div class="barra"><button id="volver" title="Volver a mytbe">&#10005;</button></div>
+<div class="barra">
+  <button id="volver" title="Volver a mytbe">&#10005;</button>
+  <button id="abrir" title="Canales">&#9776;</button>
+</div>
 <div id="grilla"></div>
+<div class="velo" id="velo" hidden></div>
+<div class="panel" id="panel" hidden>
+  <div class="cab"><b id="cuenta"></b><button id="cerrar" title="Cerrar">&#9776;</button></div>
+  <div class="lista" id="lista"></div>
+</div>
 
 <script>
-/* La lista llega en la direccion: [{c: id del canal, t: nombre}, ...]. Asi
-   esta pagina no necesita abrir el perfil, que puede estar cifrado. */
-var lista = [];
-try { lista = JSON.parse(decodeURIComponent(location.hash.slice(1))) || []; } catch(e){}
-lista = lista.filter(function(x){ return x && /^UC[\w-]{22}$/.test(x.c); }).slice(0, 8);
+var TOPE = 8;
+
+/* Todo llega en la direccion, porque esta pagina no puede abrir el perfil, que
+   puede estar cifrado: {e: canales en pantalla, todos: [{c, t, f}]}, con c el
+   id del canal, t el nombre y f la carpeta. La forma vieja era solo la lista
+   de elegidos. */
+var dir = {};
+try { dir = JSON.parse(decodeURIComponent(location.hash.slice(1))) || {}; } catch(e){}
+if(Array.isArray(dir)) dir = {e: dir.map(function(x){ return x.c; }), todos: dir};
+function canalValido(c){ return /^UC[\w-]{22}$/.test(c || ''); }
+var todos = (dir.todos || []).filter(function(x){ return x && canalValido(x.c); });
+var porId = {};
+todos.forEach(function(x){ porId[x.c] = x; });
+var enPantalla = (dir.e || []).filter(function(c){ return porId[c]; }).slice(0, TOPE);
 
 /* El vivo de un canal de 24 horas mantiene el mismo id durante semanas. Se
    recuerda en el aparato para no tener que averiguarlo cada vez. */
@@ -60,14 +102,24 @@ function anotarVivo(canal, video){
   try { localStorage.setItem(VIVOS, JSON.stringify(v)); } catch(e){}
 }
 
+/* Lo que queda en pantalla se recuerda: mytbe lo toma como punto de partida
+   la proxima vez que se toca el boton de la multivista. */
+function recordar(){
+  try {
+    localStorage.setItem('mytbe.multivista', JSON.stringify(enPantalla.map(function(c){
+      return {ytId:c, title:porId[c].t}; })));
+  } catch(e){}
+  try { history.replaceState(null, '', '#' + encodeURIComponent(JSON.stringify({e:enPantalla, todos:todos}))); } catch(e){}
+}
+
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
 var grilla = document.getElementById('grilla');
-var cuadros = [], suena = -1;
+var cuadros = [], suena = '';
 
 /* Dos intentos, sin gastar cuota:
-   1. el id que se recordo la ultima vez;
+   1. el id que ya se sabe: el de vivos.json o el que se recordo aca;
    2. el reproductor por canal, que busca solo el vivo.
    Con algunos canales (CNN, La Nacion) el reproductor por canal contesta "no
    disponible", y la API tampoco encuentra su vivo: se probo la busqueda de
@@ -81,56 +133,68 @@ function fuente(q){
                  : base + 'live_stream?channel=' + q.c + '&' + ps;
 }
 
-/* vivos.json lo escribe GitHub cada hora (.github/vivos.py) para los canales
-   que el reproductor por canal no resuelve: es lo mas fresco que hay, asi que
-   va primero. Si no llega rapido se arma igual, sin el. */
-var deGitHub = {};
+/* vivos.json tiene los ids de los canales que el reproductor por canal no
+   resuelve (.github/vivos.py). Si no llega rapido se arma igual, sin el. */
+var conocidos = {};
 function traerVivos(){
   var tarde = new Promise(function(ok){ setTimeout(ok, 2500); });
   var pedido = fetch('vivos.json', {cache:'no-store'})
     .then(function(r){ return r.ok ? r.json() : {}; })
-    .then(function(d){ deGitHub = (d && d.vivos) || {}; })
+    .then(function(d){ conocidos = (d && d.vivos) || {}; })
     .catch(function(){});
   return Promise.race([pedido, tarde]);
 }
 
-function armar(){
-  if(!lista.length){
-    grilla.innerHTML = '<div class="vacio">No hay canales elegidos.</div>';
-    return;
-  }
-  var vivos = leerVivos();
-  grilla.innerHTML = lista.map(function(x, i){
-    return '<div class="cuadro" id="q' + i + '">' +
-      '<iframe allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>' +
-      '<div class="aviso" hidden></div>' +
-      '<div class="pie"><span class="nom">' + esc(x.t) + '</span>' +
-        '<button class="rec" data-i="' + i + '" title="Recargar">&#8635;</button>' +
-        '<button class="son" data-i="' + i + '" title="Sonido">&#128263;</button>' +
-      '</div></div>';
-  }).join('');
-  cuadros = lista.map(function(x, i){
-    var el = document.getElementById('q' + i);
-    var q = {c:x.c, t:x.t, el:el, frame:el.querySelector('iframe'),
-             video: deGitHub[x.c] || vivos[x.c] || '',
-             paso: (deGitHub[x.c] || vivos[x.c]) ? 1 : 2};
-    q.frame.addEventListener('load', function(){ escuchar(q, i); });
-    cargar(q);
-    return q;
+/* Un cuadro se crea y se destruye solo: sumar o sacar un canal no recarga
+   los que ya estan sonando. */
+function crear(c){
+  var x = porId[c], el = document.createElement('div');
+  el.className = 'cuadro';
+  el.innerHTML = '<iframe allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>' +
+    '<div class="aviso" hidden></div>' +
+    '<div class="pie"><span class="nom">' + esc(x.t) + '</span>' +
+      '<button class="rec" title="Recargar">&#8635;</button>' +
+      '<button class="son" title="Sonido">&#128263;</button>' +
+    '</div>';
+  var sabido = conocidos[c] || leerVivos()[c] || '';
+  var q = {c:c, t:x.t, el:el, frame:el.querySelector('iframe'), video:sabido, paso: sabido ? 1 : 2};
+  el.querySelector('.rec').onclick = function(){ q.paso = q.video ? 1 : 2; cargar(q); };
+  el.querySelector('.son').onclick = function(){ sonido(c); };
+  q.frame.addEventListener('load', function(){ escuchar(q); });
+  grilla.appendChild(el);
+  cuadros.push(q);
+  cargar(q);
+}
+
+function quitar(c){
+  cuadros = cuadros.filter(function(q){
+    if(q.c !== c) return true;
+    q.frame.src = 'about:blank';
+    q.el.remove();
+    return false;
   });
-  acomodar();
+  if(suena === c) suena = '';
+}
+
+function vacio(){
+  var v = document.getElementById('vacio');
+  if(cuadros.length){ if(v) v.remove(); return; }
+  if(!v){
+    v = document.createElement('div'); v.id = 'vacio'; v.className = 'vacio';
+    v.textContent = 'Toca ☰ para elegir canales.';
+    document.body.appendChild(v);
+  }
 }
 
 function cargar(q){
-  q.listo = false;
   q.el.querySelector('.aviso').hidden = true;
   q.frame.src = fuente(q);
 }
 
 /* El reproductor solo cuenta lo que le pasa si se le avisa que alguien
    escucha. Despues manda su estado y sus errores por postMessage. */
-function escuchar(q, i){
-  try { q.frame.contentWindow.postMessage(JSON.stringify({event:'listening', id:i, channel:'widget'}), '*'); } catch(e){}
+function escuchar(q){
+  try { q.frame.contentWindow.postMessage(JSON.stringify({event:'listening', id:q.c, channel:'widget'}), '*'); } catch(e){}
 }
 
 window.addEventListener('message', function(e){
@@ -144,18 +208,15 @@ window.addEventListener('message', function(e){
   /* Mientras resuelve, el reproductor por canal dice "live_stream", que
      justo tiene once caracteres como un id: se descarta por nombre. */
   if(vid && vid !== 'live_stream' && /^[\w-]{11}$/.test(vid) && !q.video){
-    /* El reproductor por canal encontro el vivo: se recuerda el id. */
     q.video = vid;
     anotarVivo(q.c, q.video);
   }
-  if(d.event === 'onReady' || d.event === 'initialDelivery') {
-    q.listo = true;
-    mandar(q, cuadros.indexOf(q) === suena ? 'unMute' : 'mute');
-  }
+  if(d.event === 'onReady' || d.event === 'initialDelivery')
+    mandar(q, q.c === suena ? 'unMute' : 'mute');
 });
 
 function fallo(q){
-  if(q.paso === 1){                 /* el id recordado ya no esta al aire */
+  if(q.paso === 1){                 /* el id sabido ya no esta al aire */
     anotarVivo(q.c, '');
     q.video = ''; q.paso = 2; cargar(q); return;
   }
@@ -175,10 +236,10 @@ function mandar(q, func, args){
 }
 
 /* Un solo canal con sonido a la vez: tocar otro lo pasa ahi. */
-function sonido(i){
-  suena = (suena === i) ? -1 : i;
-  cuadros.forEach(function(q, j){
-    var si = j === suena;
+function sonido(c){
+  suena = (suena === c) ? '' : c;
+  cuadros.forEach(function(q){
+    var si = q.c === suena;
     q.el.classList.toggle('suena', si);
     q.el.querySelector('.son').innerHTML = si ? '&#128266;' : '&#128263;';
     mandar(q, si ? 'unMute' : 'mute');
@@ -202,20 +263,48 @@ function acomodar(){
 }
 window.addEventListener('resize', acomodar);
 
-grilla.addEventListener('click', function(e){
-  var b = e.target.closest('button'); if(!b) return;
-  var i = +b.dataset.i;
-  if(b.classList.contains('son')) sonido(i);
-  if(b.classList.contains('rec')){
-    var q = cuadros[i]; q.paso = q.video ? 1 : 2; cargar(q);
-  }
+/* ---- el panel ---- */
+var panel = document.getElementById('panel'), velo = document.getElementById('velo');
+
+function pintarPanel(){
+  var lleno = enPantalla.length >= TOPE;
+  var cuenta = document.getElementById('cuenta');
+  cuenta.textContent = enPantalla.length + ' de ' + TOPE;
+  cuenta.className = lleno ? 'lleno' : '';
+  var html = '', grupo = null;
+  todos.forEach(function(x){
+    if(x.f !== grupo){ grupo = x.f; html += '<div class="grupo">' + esc(grupo || '') + '</div>'; }
+    var on = enPantalla.indexOf(x.c) > -1;
+    html += '<button class="can' + (on ? ' on' : (lleno ? ' tope' : '')) + '" data-c="' + esc(x.c) + '">' +
+      '<span class="mk">' + (on ? '&#10003;' : '') + '</span><span class="nm">' + esc(x.t) + '</span></button>';
+  });
+  document.getElementById('lista').innerHTML = html ||
+    '<div class="grupo">No llegaron canales: volve a entrar desde mytbe.</div>';
+}
+
+function verPanel(si){ panel.hidden = !si; velo.hidden = !si; if(si) pintarPanel(); }
+
+document.getElementById('lista').addEventListener('click', function(e){
+  var b = e.target.closest('[data-c]'); if(!b) return;
+  var c = b.dataset.c, i = enPantalla.indexOf(c);
+  if(i > -1){ enPantalla.splice(i, 1); quitar(c); }
+  else if(enPantalla.length < TOPE){ enPantalla.push(c); crear(c); }
+  else return;
+  acomodar(); vacio(); recordar(); pintarPanel();
 });
+document.getElementById('abrir').onclick = function(){ verPanel(panel.hidden); };
+document.getElementById('cerrar').onclick = function(){ verPanel(false); };
+velo.onclick = function(){ verPanel(false); };
 
 document.getElementById('volver').onclick = function(){
   if(history.length > 1) history.back(); else location.href = './';
 };
 
-traerVivos().then(armar);
+traerVivos().then(function(){
+  enPantalla.forEach(crear);
+  acomodar(); vacio(); recordar();
+  if(!cuadros.length) verPanel(true);
+});
 </script>
 </body>
 </html>

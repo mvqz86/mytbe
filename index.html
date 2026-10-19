@@ -3737,9 +3737,12 @@ $('#barralista').addEventListener('click', function(e){
     /* Se recuerda en el perfil: la proxima vez arranca con los mismos. */
     db.multivista = elegidos.map(function(i){ return {ytId:i.ytId, title:i.title}; });
     save();
-    var lista = db.multivista.map(function(i){ return {c:i.ytId, t:i.title}; });
+    try { localStorage.setItem('mytbe.multivista', JSON.stringify(db.multivista)); } catch(err){}
+    /* Viajan tambien todos los canales guardados, para el panel de la
+       multivista: desde ahi se suman y se sacan sin volver aca. */
+    var dir = {e: db.multivista.map(function(i){ return i.ytId; }), todos: canalesParaMulti()};
     modoElegir = false; elegidos = [];
-    location.href = 'multivista.html#' + encodeURIComponent(JSON.stringify(lista));
+    location.href = 'multivista.html#' + encodeURIComponent(JSON.stringify(dir));
     return;
   }
   if(e.target.closest('[data-todolovisto]')){
@@ -3784,9 +3787,30 @@ $('#f-lista').onclick = function(){
    pantalla y no la ventana, para que la tablet en pantalla dividida lo siga
    teniendo. */
 if(Math.min(screen.width, screen.height) >= 600) $('#f-multi').hidden = false;
+/* Cada canal una vez, en el orden de las carpetas, con la carpeta al lado para
+   agruparlos en el panel. */
+function canalesParaMulti(){
+  var vistos = {}, out = [];
+  db.folders.forEach(function(f){
+    f.items.forEach(function(it){
+      if(it.kind !== 'radio' || vistos[it.ytId]) return;
+      vistos[it.ytId] = 1;
+      out.push({c:it.ytId, t:it.title, f:f.name});
+    });
+  });
+  return out;
+}
+
+/* Lo ultimo armado: si se cambio desde el panel de la multivista, eso es lo
+   mas nuevo y quedo en el aparato; si no, lo del perfil. */
+function ultimaMulti(){
+  try { var x = JSON.parse(localStorage.getItem('mytbe.multivista')); if(x && x.length) return x; } catch(e){}
+  return db.multivista || [];
+}
+
 $('#f-multi').onclick = function(){
   modoElegir = modoElegir === 'multi' ? false : 'multi';
-  elegidos = modoElegir ? (db.multivista || []).slice(0, TOPE_MULTI) : [];
+  elegidos = modoElegir ? ultimaMulti().slice(0, TOPE_MULTI) : [];
   modoOrden = false;
   render();
 };
