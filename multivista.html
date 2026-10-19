@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <style>
-/* Multivista: hasta ocho vivos a la vez, todos silenciados, y uno con sonido
+/* Multivista: hasta nueve vivos a la vez, todos silenciados, y uno con sonido
    cuando se lo pide. Fondo negro de punta a punta: es una pared de pantallas,
    no una pagina. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -19,11 +19,15 @@ html,body{margin:0;height:100%;background:#000;color:#ddd;overflow:hidden;
   background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.25);border-radius:6px;
   width:34px;height:30px;padding:0;cursor:pointer}
 .barra button:active,.pie button:active{background:rgba(255,255,255,.2)}
-#grilla{position:absolute;inset:0;display:grid;gap:3px;align-content:center;justify-content:center}
+#grilla{position:absolute;inset:0;display:grid;gap:3px}
 .cuadro{position:relative;background:#111;overflow:hidden}
 /* El que suena lleva el borde: es lo unico que hay que saber de un vistazo. */
 .cuadro.suena{outline:3px solid #e33;outline-offset:-3px;z-index:1}
-.cuadro iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+/* El video llena el cuadro aunque la forma no coincida: se agranda hasta
+   cubrirlo y lo que sobra se recorta parejo de los dos lados. Asi no quedan
+   franjas negras y la grilla usa la pantalla entera. */
+.cuadro iframe{position:absolute;left:50%;top:50%;width:var(--fw,100%);height:var(--fh,100%);
+  transform:translate(-50%,-50%);border:0}
 .pie{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:5px;
   padding:4px;background:linear-gradient(transparent,rgba(0,0,0,.75));z-index:2}
 .pie .nom{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -77,7 +81,7 @@ html,body{margin:0;height:100%;background:#000;color:#ddd;overflow:hidden;
 </div>
 
 <script>
-var TOPE = 8;
+var TOPE = 9;
 
 /* Todo llega en la direccion, porque esta pagina no puede abrir el perfil, que
    puede estar cifrado: {e: canales en pantalla, todos: [{c, t, f}]}, con c el
@@ -248,7 +252,8 @@ function sonido(c){
 }
 
 /* La grilla que mas imagen deja: se prueban todas las columnas posibles y
-   gana la que da cuadros 16:9 mas grandes en esta ventana. */
+   gana la que da cuadros 16:9 mas grandes en esta ventana. Con nueve sale
+   3x3 en cualquier pantalla apaisada. */
 function acomodar(){
   var n = cuadros.length; if(!n) return;
   var W = window.innerWidth, H = window.innerHeight, gap = 3, mejor = null;
@@ -257,9 +262,15 @@ function acomodar(){
     var w = Math.min((W - gap * (cols - 1)) / cols, ((H - gap * (filas - 1)) / filas) * 16 / 9);
     if(!mejor || w > mejor.w) mejor = {cols:cols, w:w};
   }
-  var w = Math.floor(mejor.w), h = Math.floor(mejor.w * 9 / 16);
-  grilla.style.gridTemplateColumns = 'repeat(' + mejor.cols + ',' + w + 'px)';
-  grilla.style.gridAutoRows = h + 'px';
+  /* Elegidas las columnas, la grilla se estira a toda la pantalla y cada
+     video se agranda hasta cubrir su cuadro. */
+  var cols = mejor.cols, filas = Math.ceil(n / cols);
+  var cw = (W - gap * (cols - 1)) / cols, ch = (H - gap * (filas - 1)) / filas;
+  var fw = Math.max(cw, ch * 16 / 9), fh = fw * 9 / 16;
+  grilla.style.gridTemplateColumns = 'repeat(' + cols + ',1fr)';
+  grilla.style.gridTemplateRows = 'repeat(' + filas + ',1fr)';
+  grilla.style.setProperty('--fw', Math.ceil(fw) + 'px');
+  grilla.style.setProperty('--fh', Math.ceil(fh) + 'px');
 }
 window.addEventListener('resize', acomodar);
 

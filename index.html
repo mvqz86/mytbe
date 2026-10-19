@@ -1019,7 +1019,7 @@ var modoOrden = false;            /* la lista guardada se esta reordenando */
 var modoElegir = false, elegidos = [];
 /* modoElegir dice para que se elige: 'lista' junta videos para que suenen
    seguidos; 'multi' junta canales en vivo para verlos a la vez. */
-var TOPE_MULTI = 8;
+var TOPE_MULTI = 9;
 function puedeElegir(it){
   return modoElegir === 'multi' ? it.kind === 'radio' : it.kind === 'video';
 }

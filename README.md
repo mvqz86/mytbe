@@ -72,7 +72,7 @@ muere cada vez que la transmision se reinicia. El boton apunta a
 
 ## Multivista
 
-El boton **📺**, al lado de *playlist*, junta hasta ocho radios o canales y
+El boton **📺**, al lado de *playlist*, junta hasta nueve radios o canales y
 los abre juntos en `multivista.html`, todos sonando silenciados. **🔇** en un
 cuadro le da sonido a ese y calla a los demas; **↻** lo recarga. Solo aparece
 en pantallas de 600 px o mas (PC y tablet): en el telefono se sigue disparando
@@ -86,6 +86,14 @@ el id se recuerda en el aparato (`mytbe.vivos`). Con algunos canales (CNN, La
 Nacion) ese reproductor contesta "no disponible" y la API tampoco encuentra el
 vivo —ni la busqueda con `eventType=live` ni la lista de subidas—: esos
 cuadros ofrecen abrirlo en YouTube. No se gasta cuota.
+
+Para esos canales hay un tercer camino: la pagina `youtube.com/channel/<ID>/live`
+dice cual es el vivo, pero el navegador no la puede leer desde otra web y a
+los servidores de GitHub YouTube les contesta que no hay nada al aire. La lee
+la PC: la tarea programada **mytbe vivos** corre `.github/vivos-pc.ps1`, que
+averigua los vivos de `vivos-canales.json` y sube `vivos.json`, que la
+multivista lee primero. Para sumar un canal que falla, se agrega a
+`vivos-canales.json`.
 
 ## Recientes
 

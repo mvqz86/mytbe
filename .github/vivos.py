@@ -1,5 +1,7 @@
 """Averigua que video esta al aire en cada canal de vivos-canales.json y lo
-deja en vivos.json, que la Multivista lee desde el sitio.
+deja en vivos.json, que la Multivista lee desde el sitio. Lo corre la PC
+(vivos-pc.ps1): a los servidores de GitHub YouTube les contesta que no hay
+nada al aire.
 
 Existe porque algunos canales (CNN, La Nacion) no se dejan reproducir con el
 reproductor por canal, y la API no encuentra su vivo. La pagina /live del
