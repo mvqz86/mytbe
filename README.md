@@ -70,6 +70,23 @@ Una radio se guarda como **canal**, no como video: el ID de un stream
 muere cada vez que la transmision se reinicia. El boton apunta a
 `youtube.com/channel/<ID>/live`, que siempre resuelve a lo que este al aire.
 
+## Multivista
+
+El boton **📺**, al lado de *playlist*, junta hasta ocho radios o canales y
+los abre juntos en `multivista.html`, todos sonando silenciados. **🔇** en un
+cuadro le da sonido a ese y calla a los demas; **↻** lo recarga. Solo aparece
+en pantallas de 600 px o mas (PC y tablet): en el telefono se sigue disparando
+a YouTube. La ultima seleccion queda en el perfil y la proxima vez arranca con
+esos.
+
+Para mostrar un vivo adentro de la pagina YouTube pide el id del video, y lo
+guardado es el canal. Primero se prueba el id que se recordo la ultima vez y
+despues `embed/live_stream?channel=<ID>`, que busca solo el vivo; cuando anda,
+el id se recuerda en el aparato (`mytbe.vivos`). Con algunos canales (CNN, La
+Nacion) ese reproductor contesta "no disponible" y la API tampoco encuentra el
+vivo —ni la busqueda con `eventType=live` ni la lista de subidas—: esos
+cuadros ofrecen abrirlo en YouTube. No se gasta cuota.
+
 ## Recientes
 
 Lo que disparas queda anotado tres dias en la pestana **Recientes**, con su

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>mytbe · multivista</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+/* Multivista: hasta ocho vivos a la vez, todos silenciados, y uno con sonido
+   cuando se lo pide. Fondo negro de punta a punta: es una pared de pantallas,
+   no una pagina. */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:#ddd;overflow:hidden;
+  font:12px/1.3 Arial,Helvetica,sans-serif}
+.barra{position:fixed;top:6px;left:6px;z-index:5;display:flex;gap:6px}
+.barra button,.pie button{font:bold 15px/1 Arial,Helvetica,sans-serif;color:#fff;
+  background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.25);border-radius:6px;
+  width:34px;height:30px;padding:0;cursor:pointer}
+.barra button:active,.pie button:active{background:rgba(255,255,255,.2)}
+#grilla{position:absolute;inset:0;display:grid;gap:3px;align-content:center;justify-content:center}
+.cuadro{position:relative;background:#111;overflow:hidden}
+/* El que suena lleva el borde: es lo unico que hay que saber de un vistazo. */
+.cuadro.suena{outline:3px solid #e33;outline-offset:-3px;z-index:1}
+.cuadro iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.pie{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:5px;
+  padding:4px;background:linear-gradient(transparent,rgba(0,0,0,.75));z-index:2}
+.pie .nom{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:#fff;font-weight:bold;text-shadow:0 1px 2px #000}
+.cuadro.suena .pie .son{background:#e33;border-color:#e33}
+.aviso{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:12px;color:#999;background:#111;z-index:1}
+.aviso[hidden]{display:none}
+.aviso{flex-direction:column;gap:8px}
+.aviso .ir{color:#fff;font-weight:bold;text-decoration:none;background:#c00;border-radius:6px;
+  padding:7px 12px}
+.vacio{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888}
+</style>
+</head>
+<body>
+
+<div class="barra"><button id="volver" title="Volver a mytbe">&#10005;</button></div>
+<div id="grilla"></div>
+
+<script>
+/* La lista llega en la direccion: [{c: id del canal, t: nombre}, ...]. Asi
+   esta pagina no necesita abrir el perfil, que puede estar cifrado. */
+var lista = [];
+try { lista = JSON.parse(decodeURIComponent(location.hash.slice(1))) || []; } catch(e){}
+lista = lista.filter(function(x){ return x && /^UC[\w-]{22}$/.test(x.c); }).slice(0, 8);
+
+/* El vivo de un canal de 24 horas mantiene el mismo id durante semanas. Se
+   recuerda en el aparato para no tener que averiguarlo cada vez. */
+var VIVOS = 'mytbe.vivos';
+function leerVivos(){ try { return JSON.parse(localStorage.getItem(VIVOS)) || {}; } catch(e){ return {}; } }
+function anotarVivo(canal, video){
+  var v = leerVivos();
+  if(video) v[canal] = video; else delete v[canal];
+  try { localStorage.setItem(VIVOS, JSON.stringify(v)); } catch(e){}
+}
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+var grilla = document.getElementById('grilla');
+var cuadros = [], suena = -1;
+
+/* Dos intentos, sin gastar cuota:
+   1. el id que se recordo la ultima vez;
+   2. el reproductor por canal, que busca solo el vivo.
+   Con algunos canales (CNN, La Nacion) el reproductor por canal contesta "no
+   disponible", y la API tampoco encuentra su vivo: se probo la busqueda de
+   vivos y la lista de subidas, y las dos vuelven vacias. Esos se ofrecen para
+   abrir en YouTube. */
+function fuente(q){
+  var base = 'https://www.youtube.com/embed/';
+  var ps = 'autoplay=1&mute=1&playsinline=1&controls=0&rel=0&enablejsapi=1' +
+           '&origin=' + encodeURIComponent(location.origin);
+  return q.video ? base + q.video + '?' + ps
+                 : base + 'live_stream?channel=' + q.c + '&' + ps;
+}
+
+function armar(){
+  if(!lista.length){
+    grilla.innerHTML = '<div class="vacio">No hay canales elegidos.</div>';
+    return;
+  }
+  var vivos = leerVivos();
+  grilla.innerHTML = lista.map(function(x, i){
+    return '<div class="cuadro" id="q' + i + '">' +
+      '<iframe allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>' +
+      '<div class="aviso" hidden></div>' +
+      '<div class="pie"><span class="nom">' + esc(x.t) + '</span>' +
+        '<button class="rec" data-i="' + i + '" title="Recargar">&#8635;</button>' +
+        '<button class="son" data-i="' + i + '" title="Sonido">&#128263;</button>' +
+      '</div></div>';
+  }).join('');
+  cuadros = lista.map(function(x, i){
+    var el = document.getElementById('q' + i);
+    var q = {c:x.c, t:x.t, el:el, frame:el.querySelector('iframe'),
+             video: vivos[x.c] || '', paso: vivos[x.c] ? 1 : 2};
+    q.frame.addEventListener('load', function(){ escuchar(q, i); });
+    cargar(q);
+    return q;
+  });
+  acomodar();
+}
+
+function cargar(q){
+  q.listo = false;
+  q.el.querySelector('.aviso').hidden = true;
+  q.frame.src = fuente(q);
+}
+
+/* El reproductor solo cuenta lo que le pasa si se le avisa que alguien
+   escucha. Despues manda su estado y sus errores por postMessage. */
+function escuchar(q, i){
+  try { q.frame.contentWindow.postMessage(JSON.stringify({event:'listening', id:i, channel:'widget'}), '*'); } catch(e){}
+}
+
+window.addEventListener('message', function(e){
+  if(!/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin)) return;
+  var d; try { d = JSON.parse(e.data); } catch(err){ return; }
+  var q = cuadros.filter(function(c){ return c.frame.contentWindow === e.source; })[0];
+  if(!q || !d) return;
+  if(d.event === 'onError') { fallo(q); return; }
+  var info = d.info || {};
+  var vid = info.videoData && info.videoData.video_id;
+  /* Mientras resuelve, el reproductor por canal dice "live_stream", que
+     justo tiene once caracteres como un id: se descarta por nombre. */
+  if(vid && vid !== 'live_stream' && /^[\w-]{11}$/.test(vid) && !q.video){
+    /* El reproductor por canal encontro el vivo: se recuerda el id. */
+    q.video = vid;
+    anotarVivo(q.c, q.video);
+  }
+  if(d.event === 'onReady' || d.event === 'initialDelivery') {
+    q.listo = true;
+    mandar(q, cuadros.indexOf(q) === suena ? 'unMute' : 'mute');
+  }
+});
+
+function fallo(q){
+  if(q.paso === 1){                 /* el id recordado ya no esta al aire */
+    anotarVivo(q.c, '');
+    q.video = ''; q.paso = 2; cargar(q); return;
+  }
+  avisar(q, 'No se puede ver aca', true);
+}
+
+function avisar(q, t, conBoton){
+  var a = q.el.querySelector('.aviso');
+  a.innerHTML = '<span>' + esc(t) + '</span>' + (conBoton
+    ? '<a class="ir" href="https://www.youtube.com/channel/' + q.c + '/live" target="_blank" rel="noopener">&#9654; YouTube</a>'
+    : '');
+  a.hidden = false;
+}
+
+function mandar(q, func, args){
+  try { q.frame.contentWindow.postMessage(JSON.stringify({event:'command', func:func, args:args || []}), '*'); } catch(e){}
+}
+
+/* Un solo canal con sonido a la vez: tocar otro lo pasa ahi. */
+function sonido(i){
+  suena = (suena === i) ? -1 : i;
+  cuadros.forEach(function(q, j){
+    var si = j === suena;
+    q.el.classList.toggle('suena', si);
+    q.el.querySelector('.son').innerHTML = si ? '&#128266;' : '&#128263;';
+    mandar(q, si ? 'unMute' : 'mute');
+    if(si){ mandar(q, 'setVolume', [100]); mandar(q, 'playVideo'); }
+  });
+}
+
+/* La grilla que mas imagen deja: se prueban todas las columnas posibles y
+   gana la que da cuadros 16:9 mas grandes en esta ventana. */
+function acomodar(){
+  var n = cuadros.length; if(!n) return;
+  var W = window.innerWidth, H = window.innerHeight, gap = 3, mejor = null;
+  for(var cols = 1; cols <= n; cols++){
+    var filas = Math.ceil(n / cols);
+    var w = Math.min((W - gap * (cols - 1)) / cols, ((H - gap * (filas - 1)) / filas) * 16 / 9);
+    if(!mejor || w > mejor.w) mejor = {cols:cols, w:w};
+  }
+  var w = Math.floor(mejor.w), h = Math.floor(mejor.w * 9 / 16);
+  grilla.style.gridTemplateColumns = 'repeat(' + mejor.cols + ',' + w + 'px)';
+  grilla.style.gridAutoRows = h + 'px';
+}
+window.addEventListener('resize', acomodar);
+
+grilla.addEventListener('click', function(e){
+  var b = e.target.closest('button'); if(!b) return;
+  var i = +b.dataset.i;
+  if(b.classList.contains('son')) sonido(i);
+  if(b.classList.contains('rec')){
+    var q = cuadros[i]; q.paso = q.video ? 1 : 2; cargar(q);
+  }
+});
+
+document.getElementById('volver').onclick = function(){
+  if(history.length > 1) history.back(); else location.href = './';
+};
+
+armar();
+</script>
+</body>
+</html>

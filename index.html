@@ -189,7 +189,8 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
 .vivo[aria-pressed="true"]{
   background:var(--red);border-color:var(--red);color:#fff}
 /* El de playlist se prende azul: el rojo ya significa "esta al aire". */
-#f-lista[aria-pressed="true"]{background:var(--sel);border-color:var(--sel);color:#fff}
+#f-lista[aria-pressed="true"],#f-multi[aria-pressed="true"]{background:var(--sel);border-color:var(--sel);color:#fff}
+#f-multi[hidden]{display:none}
 
 /* La barra del modo playlist: lo que llevas elegido y que hacer con eso. */
 .barralista{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
@@ -197,6 +198,7 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
   padding:8px 10px;font-size:12px;color:var(--ink-4)}
 .barralista[hidden]{display:none}
 .barralista b{color:var(--ink)}
+.barralista b.mal{color:var(--red-text)}
 .barralista button{padding:8px 12px;font-size:12px}
 .barralista .der{margin-left:auto;display:flex;gap:6px}
 
@@ -573,6 +575,7 @@ button:active{background:linear-gradient(var(--btn-a2),var(--btn-b2))}
       <span class="hueco" aria-hidden="true">Buscar:</span>
       <button id="f-live" class="vivo" aria-pressed="false">&#128308;<span class="pal"> en vivo</span></button>
       <button id="f-lista" class="vivo" aria-pressed="false">&#9654;<span class="pal"> playlist</span></button>
+      <button id="f-multi" class="vivo" aria-pressed="false" hidden>&#128250;<span class="pal"> multivista</span></button>
     </div>
   </div>
 
@@ -1014,6 +1017,12 @@ var modoOrden = false;            /* la lista guardada se esta reordenando */
    se pueden juntar de varias carpetas y hasta de varias solapas, y quedan en
    el orden en que se fueron tocando, que es el orden en que van a sonar. */
 var modoElegir = false, elegidos = [];
+/* modoElegir dice para que se elige: 'lista' junta videos para que suenen
+   seguidos; 'multi' junta canales en vivo para verlos a la vez. */
+var TOPE_MULTI = 8;
+function puedeElegir(it){
+  return modoElegir === 'multi' ? it.kind === 'radio' : it.kind === 'video';
+}
 /* Que carpeta esta elegida en la columna, por solapa. En memoria: es donde
    estas parado, no algo que valga la pena guardar. */
 var elegida = {}, ladoAbierto = false, modoCarpetas = false, arrastrando = null;
@@ -1070,7 +1079,7 @@ function renderRecientes(){
   } else {
     html = db.reproducidos.map(function(r, i){
       var ya = carpetaDe(r.ytId);
-      var elegible = modoElegir && r.kind === 'video';
+      var elegible = modoElegir && puedeElegir(r);
       var marcado = elegible && posicionElegido(r.ytId) > -1;
       return '<div class="row compact' +
         (modoElegir ? ' eligiendo' : '') + (marcado ? ' marcado' : '') +
@@ -1261,7 +1270,7 @@ function renderFolder(){
     /* Eligiendo, la fila deja de disparar y pasa a marcar. Lo que no es un
        video no se puede elegir: una radio no tiene id de video y una lista no
        entra adentro de otra. */
-    var elegible = modoElegir && it.kind === 'video';
+    var elegible = modoElegir && puedeElegir(it);
     var marcado = elegible && posicionElegido(it.ytId) > -1;
 
     return '<div class="row compact lista' +
@@ -1333,6 +1342,7 @@ function renderFolder(){
       (function(){
         var suyos = items.filter(function(i){ return i.kind === 'video'; });
         if(!suyos.length) return propio ? '' : botonNueva(carpeta);
+        if(modoElegir === 'multi') return '';
         if(modoElegir){
           /* Armando una lista, el boton del grupo agrega o saca los suyos de
              una: veinte temas en un toque en vez de veinte. */
@@ -2276,7 +2286,8 @@ $('#panel').addEventListener('click', function(e){
       var duena = carpetaPorId(a.dataset.en);
       var lista = duena ? duena.items : db.reproducidos;
       var cual = lista.filter(function(i){ return i.ytId === a.dataset.elegir; })[0];
-      if(cual) elegidos.push({ytId:cual.ytId, title:cual.title, thumb:cual.thumb || ''});
+      if(cual && !(modoElegir === 'multi' && elegidos.length >= TOPE_MULTI))
+        elegidos.push({ytId:cual.ytId, title:cual.title, thumb:cual.thumb || ''});
     }
     render();
     return;
@@ -3700,8 +3711,17 @@ if('serviceWorker' in navigator){
 function barraLista(){
   var b = $('#barralista');
   b.hidden = !modoElegir;
-  $('#f-lista').setAttribute('aria-pressed', modoElegir ? 'true' : 'false');
+  $('#f-lista').setAttribute('aria-pressed', modoElegir === 'lista' ? 'true' : 'false');
+  $('#f-multi').setAttribute('aria-pressed', modoElegir === 'multi' ? 'true' : 'false');
   if(!modoElegir) return;
+  if(modoElegir === 'multi'){
+    b.innerHTML = '<b' + (elegidos.length >= TOPE_MULTI ? ' class="mal"' : '') + '>' +
+      elegidos.length + ' de ' + TOPE_MULTI + '</b>' +
+      (elegidos.length
+        ? '<span class="der"><button data-vermulti>&#128250; ver</button></span>'
+        : '<span style="margin-left:4px">toca los canales</span>');
+    return;
+  }
   b.innerHTML = '<button data-todolovisto>+ todo lo que se ve</button>' +
     (elegidos.length
       ? '<b>' + plural(elegidos.length, 'elegido', 'elegidos') + '</b>' +
@@ -3713,6 +3733,15 @@ function barraLista(){
 }
 
 $('#barralista').addEventListener('click', function(e){
+  if(e.target.closest('[data-vermulti]')){
+    /* Se recuerda en el perfil: la proxima vez arranca con los mismos. */
+    db.multivista = elegidos.map(function(i){ return {ytId:i.ytId, title:i.title}; });
+    save();
+    var lista = db.multivista.map(function(i){ return {c:i.ytId, t:i.title}; });
+    modoElegir = false; elegidos = [];
+    location.href = 'multivista.html#' + encodeURIComponent(JSON.stringify(lista));
+    return;
+  }
   if(e.target.closest('[data-todolovisto]')){
     var fv = carpetaPorId(current);
     var raizv = carpetaPorId(elegida[fv.id]) || fv;
@@ -3744,8 +3773,20 @@ $('#barralista').addEventListener('click', function(e){
 });
 
 $('#f-lista').onclick = function(){
-  modoElegir = !modoElegir;
-  if(!modoElegir) elegidos = [];
+  modoElegir = modoElegir === 'lista' ? false : 'lista';
+  elegidos = [];
+  modoOrden = false;
+  render();
+};
+
+/* Multivista: varios vivos a la vez, silenciados. Solo en PC y tablet: en el
+   telefono se sigue disparando a YouTube, que es como se usa ahi. Se mira la
+   pantalla y no la ventana, para que la tablet en pantalla dividida lo siga
+   teniendo. */
+if(Math.min(screen.width, screen.height) >= 600) $('#f-multi').hidden = false;
+$('#f-multi').onclick = function(){
+  modoElegir = modoElegir === 'multi' ? false : 'multi';
+  elegidos = modoElegir ? (db.multivista || []).slice(0, TOPE_MULTI) : [];
   modoOrden = false;
   render();
 };
