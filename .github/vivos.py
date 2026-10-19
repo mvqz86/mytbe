@@ -33,15 +33,22 @@ for x in canales:
         print('%-20s %s' % (x['t'], v.group(1)))
     else:
         # Sin canonical a un video: o no esta al aire, o YouTube nos freno.
-        motivo = 'no esta al aire' if canon else 'pagina sin canonical (bloqueo?)'
+        # Se anota que vio, para poder distinguir una cosa de la otra.
+        titulo = re.search(r'<title>([^<]*)', html)
+        motivo = ('canonical al canal: no esta al aire' if canon
+                  else 'sin canonical; titulo: %s' % (titulo.group(1)[:80] if titulo else '-'))
         problemas.append('%s: %s' % (x['t'], motivo))
+        # Una corrida que falla no borra lo que se sabia: el vivo de un canal de
+        # 24 horas suele seguir siendo el mismo.
+        if viejo.get('vivos', {}).get(x['c']):
+            vivos[x['c']] = viejo['vivos'][x['c']]
 
 for p in problemas:
     print('AVISO', p)
 
-if vivos == viejo.get('vivos'):
+if vivos == viejo.get('vivos') and problemas == viejo.get('avisos'):
     print('sin cambios'); sys.exit(0)
-json.dump({'vivos': vivos,
+json.dump({'vivos': vivos, 'avisos': problemas,
            'actualizado': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')},
           open('vivos.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 print('vivos.json actualizado')
